@@ -1,3 +1,4 @@
+import uuid as uuid_mod
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -37,7 +38,8 @@ async def get_current_professor(
         professor_id = payload.get("sub")
         if professor_id is None:
             raise HTTPException(status_code=401, detail="Invalid token")
-    except JWTError:
+        professor_id = uuid_mod.UUID(professor_id)
+    except (JWTError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid token")
 
     result = await db.execute(select(Professor).where(Professor.id == professor_id))
