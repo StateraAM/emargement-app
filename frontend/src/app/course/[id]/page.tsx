@@ -2,7 +2,14 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useCourseStudents } from "@/hooks/use-courses";
-import { validateAttendance } from "@/hooks/use-attendance";
+import {
+  validateAttendance,
+  getAttendanceStatus,
+  getAttendanceRecords,
+  updateAttendance,
+  type AttendanceStatus,
+  type AttendanceRecord,
+} from "@/hooks/use-attendance";
 import { useAuth } from "@/hooks/use-auth";
 import { API_URL } from "@/lib/api";
 
@@ -43,13 +50,47 @@ export default function AttendancePage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [showQr, setShowQr] = useState(false);
+  const [attendanceStatus, setAttendanceStatus] = useState<AttendanceStatus | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
   const router = useRouter();
+
+  const isValidated = attendanceStatus?.validated ?? false;
+  const isEditable = attendanceStatus?.editable ?? true;
+  const disabled = isValidated && !isEditable;
 
   useEffect(() => {
     if (!authLoading && !professor) router.push("/login");
   }, [authLoading, professor, router]);
 
-  if (authLoading || isLoading) {
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const status = await getAttendanceStatus(id);
+        if (cancelled) return;
+        setAttendanceStatus(status);
+        if (status.validated) {
+          const records = await getAttendanceRecords(id);
+          if (cancelled) return;
+          const prePopulated: Record<string, Status> = {};
+          records.forEach((r: AttendanceRecord) => {
+            if (r.status === "present" || r.status === "absent" || r.status === "late") {
+              prePopulated[r.student_id] = r.status as Status;
+            }
+          });
+          setStatuses(prePopulated);
+        }
+      } catch {
+        // Status endpoint not available or course not validated yet — use defaults
+      } finally {
+        if (!cancelled) setStatusLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id]);
+
+  if (authLoading || isLoading || statusLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--color-surface)]">
         <div className="w-8 h-8 border-3 border-[var(--color-primary)]/20 border-t-[var(--color-primary)] rounded-full animate-spin mb-4" />
@@ -64,6 +105,7 @@ export default function AttendancePage() {
     statuses[studentId] || "absent";
 
   const toggleStatus = (studentId: string) => {
+    if (disabled) return;
     const current = getStatus(studentId);
     const next: Status =
       current === "absent" ? "present" : current === "present" ? "late" : "absent";
@@ -78,14 +120,18 @@ export default function AttendancePage() {
   };
 
   const handleSubmit = async () => {
-    if (!students) return;
+    if (!students || disabled) return;
     setSubmitting(true);
     try {
       const entries = students.map((s) => ({
         student_id: s.id,
         status: getStatus(s.id),
       }));
-      await validateAttendance(id, entries);
+      if (isValidated) {
+        await updateAttendance(id, entries);
+      } else {
+        await validateAttendance(id, entries);
+      }
       setSubmitted(true);
     } catch {
       alert("Erreur lors de la validation");
@@ -210,6 +256,49 @@ export default function AttendancePage() {
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-5 animate-fade-in">
+        {/* Validated banner */}
+        {isValidated && (
+          <div className="flex items-center gap-2 mb-4 px-4 py-3 rounded-xl bg-[var(--color-primary)] text-white">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M9 12l2 2 4-4" />
+              <circle cx="12" cy="12" r="10" />
+            </svg>
+            <span className="font-semibold text-sm">Appel valide</span>
+          </div>
+        )}
+
+        {/* Non-editable message */}
+        {disabled && (
+          <div className="flex items-center gap-2 mb-4 px-4 py-3 rounded-xl bg-[var(--color-warning-bg)] text-[var(--color-warning)] border border-[var(--color-warning-border)]">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span className="text-sm font-medium">
+              Modification impossible — la moitie du cours est depassee
+            </span>
+          </div>
+        )}
+
         {/* Summary bar */}
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm text-[var(--color-text-muted)]">
@@ -229,20 +318,22 @@ export default function AttendancePage() {
         </div>
 
         {/* Quick actions */}
-        <div className="flex gap-2 mb-4">
-          <button
-            onClick={() => markAll("present")}
-            className="text-xs px-3 py-1.5 rounded-lg bg-[var(--color-success-bg)] text-[var(--color-success)] font-medium border border-[var(--color-success-border)] hover:bg-[var(--color-success)]/20 transition-colors"
-          >
-            Tous presents
-          </button>
-          <button
-            onClick={() => markAll("absent")}
-            className="text-xs px-3 py-1.5 rounded-lg bg-[var(--color-danger-bg)] text-[var(--color-danger)] font-medium border border-[var(--color-danger-border)] hover:bg-[var(--color-danger)]/20 transition-colors"
-          >
-            Tous absents
-          </button>
-        </div>
+        {!disabled && (
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => markAll("present")}
+              className="text-xs px-3 py-1.5 rounded-lg bg-[var(--color-success-bg)] text-[var(--color-success)] font-medium border border-[var(--color-success-border)] hover:bg-[var(--color-success)]/20 transition-colors"
+            >
+              Tous presents
+            </button>
+            <button
+              onClick={() => markAll("absent")}
+              className="text-xs px-3 py-1.5 rounded-lg bg-[var(--color-danger-bg)] text-[var(--color-danger)] font-medium border border-[var(--color-danger-border)] hover:bg-[var(--color-danger)]/20 transition-colors"
+            >
+              Tous absents
+            </button>
+          </div>
+        )}
 
         {/* Student list */}
         <div className="space-y-2 stagger-children">
@@ -253,7 +344,12 @@ export default function AttendancePage() {
               <button
                 key={student.id}
                 onClick={() => toggleStatus(student.id)}
-                className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-200 active:scale-[0.98] ${config.bg} ${config.border}`}
+                disabled={disabled}
+                className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-200 ${
+                  disabled
+                    ? "opacity-50 cursor-not-allowed"
+                    : "active:scale-[0.98]"
+                } ${config.bg} ${config.border}`}
               >
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3">
@@ -299,40 +395,44 @@ export default function AttendancePage() {
         </div>
 
         {/* Submit */}
-        <div className="sticky bottom-0 pt-4 pb-6 mt-4 bg-gradient-to-t from-[var(--color-surface)] via-[var(--color-surface)] to-transparent">
-          <button
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="w-full bg-[var(--color-primary)] text-white py-3.5 rounded-xl font-semibold hover:bg-[var(--color-primary-dark)] disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98] shadow-lg shadow-[var(--color-primary)]/20"
-          >
-            {submitting ? (
-              <span className="flex items-center justify-center gap-2">
-                <svg
-                  className="animate-spin h-4 w-4"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                  />
-                </svg>
-                Validation en cours...
-              </span>
-            ) : (
-              "Valider l'appel"
-            )}
-          </button>
-        </div>
+        {!disabled && (
+          <div className="sticky bottom-0 pt-4 pb-6 mt-4 bg-gradient-to-t from-[var(--color-surface)] via-[var(--color-surface)] to-transparent">
+            <button
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="w-full bg-[var(--color-primary)] text-white py-3.5 rounded-xl font-semibold hover:bg-[var(--color-primary-dark)] disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98] shadow-lg shadow-[var(--color-primary)]/20"
+            >
+              {submitting ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg
+                    className="animate-spin h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    />
+                  </svg>
+                  Validation en cours...
+                </span>
+              ) : isValidated ? (
+                "Modifier l'appel"
+              ) : (
+                "Valider l'appel"
+              )}
+            </button>
+          </div>
+        )}
       </main>
     </div>
   );

@@ -27,7 +27,11 @@ function useAttendanceHistory() {
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("fr-FR", {
+  // dateStr is "dd/MM/yyyy HH:mm" format from backend
+  const [datePart] = dateStr.split(" ");
+  const [day, month, year] = datePart.split("/");
+  const d = new Date(Number(year), Number(month) - 1, Number(day));
+  return d.toLocaleDateString("fr-FR", {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -115,6 +119,19 @@ function StudentDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showSuccess, setShowSuccess] = useState(false);
+  const [filters, setFilters] = useState<Set<string>>(new Set(["absent", "late"]));
+
+  const toggleFilter = (key: string) => {
+    setFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (searchParams.get("justified") === "1") {
@@ -265,12 +282,44 @@ function StudentDashboard() {
 
         {/* Attendance History */}
         <section>
-          <h2
-            className="text-2xl font-bold text-[var(--color-text)] mb-4"
-            style={{ fontFamily: "var(--font-playfair)" }}
-          >
-            Historique de presence
-          </h2>
+          <div className="flex items-baseline gap-2 mb-4">
+            <h2
+              className="text-2xl font-bold text-[var(--color-text)]"
+              style={{ fontFamily: "var(--font-playfair)" }}
+            >
+              Historique de presence
+            </h2>
+            {history && history.length > 0 && (
+              <span className="text-sm text-[var(--color-text-muted)]">
+                ({history.filter((r) => filters.has(r.status)).length} resultat{history.filter((r) => filters.has(r.status)).length > 1 ? "s" : ""})
+              </span>
+            )}
+          </div>
+
+          {history && history.length > 0 && (
+            <div className="flex gap-2 mb-4">
+              {([
+                { key: "present", label: "Present", color: "success" },
+                { key: "late", label: "En retard", color: "warning" },
+                { key: "absent", label: "Absent", color: "danger" },
+              ] as const).map(({ key, label, color }) => {
+                const active = filters.has(key);
+                return (
+                  <button
+                    key={key}
+                    onClick={() => toggleFilter(key)}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all ${
+                      active
+                        ? `bg-[var(--color-${color}-bg)] text-[var(--color-${color})] border-[var(--color-${color}-border)]`
+                        : "bg-transparent text-[var(--color-text-muted)] border-[var(--color-border)]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {!history || history.length === 0 ? (
             <div className="text-center py-10 bg-[var(--color-surface-card)] rounded-2xl border border-[var(--color-border-light)]">
@@ -305,7 +354,7 @@ function StudentDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {history.map((record) => {
+                    {history.filter((r) => filters.has(r.status)).map((record) => {
                       const status = statusLabel(record.status);
                       const justStatus = getJustificationStatus(record);
                       return (
