@@ -36,8 +36,10 @@ async def validate_attendance(
     for entry in request.entries:
         student = await db.get(Student, UUID(entry.student_id))
         token = uuid.uuid4()
+        record_id = uuid.uuid4()
 
         record = AttendanceRecord(
+            id=record_id,
             course_id=UUID(request.course_id),
             student_id=UUID(entry.student_id),
             status=entry.status,
@@ -61,7 +63,7 @@ async def validate_attendance(
 
             # Create in-app notification
             notification_data = json.dumps({
-                "record_id": str(record.id),
+                "record_id": str(record_id),
                 "signature_token": str(token),
             })
             notification = Notification(
