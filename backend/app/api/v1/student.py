@@ -188,6 +188,25 @@ async def sign_attendance_record(
     record.signed_at = datetime.utcnow()
     if body.signature_data:
         record.signature_data = body.signature_data
+
+    # Mark the corresponding signature_request notification as read
+    notif_stmt = (
+        select(Notification)
+        .where(
+            Notification.student_id == student.id,
+            Notification.type == "signature_request",
+            Notification.is_read == False,
+        )
+    )
+    notif_result = await db.execute(notif_stmt)
+    for notif in notif_result.scalars().all():
+        try:
+            parsed = json.loads(notif.data) if notif.data else {}
+            if parsed.get("record_id") == record_id:
+                notif.is_read = True
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     await db.commit()
 
     return {"ok": True, "signed_at": record.signed_at.isoformat()}

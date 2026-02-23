@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/lib/api";
 import { StudentHeader } from "@/components/student-header";
 import SignaturePad from "signature_pad";
+import { mutate } from "swr";
 
 interface RecordInfo {
   id: string;
@@ -78,6 +79,9 @@ export default function StudentSignPage() {
       await api.post(`/api/v1/student/sign/${id}`, {
         signature_data: signatureData,
       });
+      // Invalidate notifications cache so dashboard removes the signed entry
+      mutate("student-notifications");
+      mutate("student-unread-count");
       setSigned(true);
     } catch {
       setError("Erreur lors de la signature. Veuillez reessayer.");
