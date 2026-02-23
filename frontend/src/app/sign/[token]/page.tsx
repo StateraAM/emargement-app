@@ -47,27 +47,14 @@ export default function SignaturePage() {
   useEffect(() => {
     if (canvasRef.current && !signed && !loading && !error) {
       const canvas = canvasRef.current;
-      const resizeCanvas = () => {
-        const rect = canvas.getBoundingClientRect();
-        const ratio = Math.max(window.devicePixelRatio || 1, 1);
-        canvas.width = rect.width * ratio;
-        canvas.height = rect.height * ratio;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.scale(ratio, ratio);
-        }
-        canvas.style.width = rect.width + "px";
-        canvas.style.height = rect.height + "px";
-      };
-
-      resizeCanvas();
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
 
       sigPadRef.current = new SignaturePad(canvas, {
         backgroundColor: "rgb(255, 255, 255)",
         penColor: "#1e3a5f",
       });
-
-      sigPadRef.current.clear();
     }
 
     return () => {
