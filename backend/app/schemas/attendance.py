@@ -3,6 +3,12 @@ from typing import Optional, List
 from pydantic import BaseModel
 
 
+class AttendanceStatusResponse(BaseModel):
+    validated: bool
+    editable: bool
+    deadline: Optional[str] = None
+
+
 class AttendanceEntry(BaseModel):
     student_id: str
     status: str  # present | absent | late

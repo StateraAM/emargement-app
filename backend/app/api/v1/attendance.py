@@ -2,7 +2,7 @@ import uuid
 import json
 from uuid import UUID
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -13,7 +13,7 @@ from app.models.student import Student
 from app.models.course import Course
 from app.models.attendance_record import AttendanceRecord
 from app.models.notification import Notification
-from app.schemas.attendance import ValidateAttendanceRequest, AttendanceRecordResponse
+from app.schemas.attendance import ValidateAttendanceRequest, AttendanceRecordResponse, AttendanceStatusResponse
 from app.services.email import email_service
 from app.services.qrcode import generate_qr_code
 from app.core.config import settings
@@ -88,6 +88,130 @@ async def validate_attendance(
         )
         for record, student in records
     ]
+
+
+@router.put("/validate", response_model=list[AttendanceRecordResponse])
+async def update_attendance(
+    request: ValidateAttendanceRequest,
+    professor: Professor = Depends(get_current_professor),
+    db: AsyncSession = Depends(get_db),
+):
+    course = await db.get(Course, UUID(request.course_id))
+    if not course:
+        raise HTTPException(status_code=404, detail="Cours introuvable")
+
+    # Check if records already exist for this course
+    existing_stmt = select(AttendanceRecord).where(
+        AttendanceRecord.course_id == UUID(request.course_id)
+    )
+    existing_result = await db.execute(existing_stmt)
+    existing_records = existing_result.scalars().all()
+
+    if not existing_records:
+        raise HTTPException(status_code=404, detail="Aucun emargement trouve pour ce cours")
+
+    # Time check: deadline = start_time + (end_time - start_time) / 2
+    duration = course.end_time - course.start_time
+    deadline = course.start_time + duration / 2
+    now = datetime.utcnow()
+
+    if now > deadline.replace(tzinfo=None):
+        raise HTTPException(
+            status_code=403,
+            detail="La moitie du cours est depassee, modification impossible",
+        )
+
+    # Build lookup of existing records by student_id
+    record_by_student = {str(r.student_id): r for r in existing_records}
+
+    updated = []
+    for entry in request.entries:
+        record = record_by_student.get(entry.student_id)
+        if not record:
+            continue  # skip students without an existing record
+
+        old_status = record.status
+        record.status = entry.status
+        record.marked_by_prof_at = now
+
+        student = await db.get(Student, UUID(entry.student_id))
+
+        # If status changed to present/late and previously was absent (no signature sent yet)
+        if entry.status in ("present", "late") and old_status == "absent" and student:
+            token = uuid.uuid4()
+            record.signature_token = token
+            record.signature_token_expires = now + timedelta(hours=24)
+
+            signature_url = f"{settings.FRONTEND_URL}/sign/{token}"
+            await email_service.send_signature_email(
+                student_email=student.email,
+                student_name=f"{student.first_name} {student.last_name}",
+                course_name=course.name,
+                course_date=course.start_time.strftime("%d/%m/%Y %H:%M"),
+                signature_url=signature_url,
+            )
+
+            notification_data = json.dumps({
+                "record_id": str(record.id),
+                "signature_token": str(token),
+            })
+            notification = Notification(
+                student_id=student.id,
+                type="signature_request",
+                title="Signature requise",
+                message=f"Veuillez signer votre presence pour le cours {course.name}",
+                data=notification_data,
+            )
+            db.add(notification)
+
+        updated.append((record, student))
+
+    await db.commit()
+
+    return [
+        AttendanceRecordResponse(
+            id=str(record.id),
+            student_id=str(record.student_id),
+            student_name=f"{student.first_name} {student.last_name}" if student else "Unknown",
+            status=record.status,
+            signed_at=record.signed_at,
+            qr_signed_at=record.qr_signed_at,
+        )
+        for record, student in updated
+    ]
+
+
+@router.get("/{course_id}/status", response_model=AttendanceStatusResponse)
+async def get_attendance_status(
+    course_id: str,
+    professor: Professor = Depends(get_current_professor),
+    db: AsyncSession = Depends(get_db),
+):
+    course = await db.get(Course, UUID(course_id))
+    if not course:
+        raise HTTPException(status_code=404, detail="Cours introuvable")
+
+    # Check if attendance records exist
+    stmt = select(AttendanceRecord).where(
+        AttendanceRecord.course_id == UUID(course_id)
+    ).limit(1)
+    result = await db.execute(stmt)
+    validated = result.scalar_one_or_none() is not None
+
+    if not validated:
+        return AttendanceStatusResponse(validated=False, editable=False, deadline=None)
+
+    # Calculate deadline = start_time + (end_time - start_time) / 2
+    duration = course.end_time - course.start_time
+    deadline = course.start_time + duration / 2
+    now = datetime.utcnow()
+    editable = now <= deadline.replace(tzinfo=None)
+
+    return AttendanceStatusResponse(
+        validated=True,
+        editable=editable,
+        deadline=deadline.isoformat(),
+    )
 
 
 @router.get("/{course_id}", response_model=list[AttendanceRecordResponse])
