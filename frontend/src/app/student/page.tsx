@@ -180,7 +180,7 @@ function StudentDashboard() {
       <StudentHeader />
 
       {/* Content */}
-      <main className="max-w-lg mx-auto px-4 py-6 animate-fade-in">
+      <main className="max-w-2xl mx-auto px-4 py-6 animate-fade-in">
         {/* Success message */}
         {showSuccess && (
           <div className="mb-6 flex items-center gap-2 text-[var(--color-success)] text-sm bg-[var(--color-success-bg)] px-4 py-3 rounded-xl border border-[var(--color-success-border)] animate-fade-in">
