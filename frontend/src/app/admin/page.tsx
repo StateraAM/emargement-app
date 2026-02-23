@@ -1,6 +1,8 @@
 "use client";
 import { useAuth } from "@/hooks/use-auth";
-import { useAdminStats, useAdminStudents, useAdminProfessors } from "@/hooks/use-admin";
+import { useAdminStats, useAdminStudents, useAdminProfessors, useAdminJustifications, reviewJustification } from "@/hooks/use-admin";
+import { API_URL } from "@/lib/api";
+import { mutate } from "swr";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -11,6 +13,11 @@ export default function AdminPage() {
   const { data: professors } = useAdminProfessors();
   const router = useRouter();
   const [search, setSearch] = useState("");
+  const [justifFilter, setJustifFilter] = useState("");
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [rejectComment, setRejectComment] = useState("");
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const { data: justifications } = useAdminJustifications(justifFilter || undefined);
 
   useEffect(() => {
     if (!loading && (!professor || !isAdmin)) router.push("/login");
@@ -115,6 +122,189 @@ export default function AdminPage() {
             accent={false}
             warning={stats.low_attendance_alerts > 0}
           />
+        </div>
+
+        {/* Justifications Section */}
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-4">
+            <h2
+              className="text-2xl font-bold text-[var(--color-text)]"
+              style={{ fontFamily: "var(--font-playfair)" }}
+            >
+              Justificatifs
+            </h2>
+            {justifications && justifications.filter((j) => j.status === "pending").length > 0 && (
+              <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-[var(--color-warning-bg)] text-[var(--color-warning)]">
+                {justifications.filter((j) => j.status === "pending").length} en attente
+              </span>
+            )}
+          </div>
+
+          <div className="flex gap-2 mb-4">
+            {[
+              { label: "Tous", value: "" },
+              { label: "En attente", value: "pending" },
+              { label: "Approuves", value: "approved" },
+              { label: "Refuses", value: "rejected" },
+            ].map((f) => (
+              <button
+                key={f.value}
+                onClick={() => setJustifFilter(f.value)}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                  justifFilter === f.value
+                    ? "bg-[var(--color-primary)] text-white"
+                    : "bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-surface)]"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="bg-[var(--color-surface-card)] rounded-2xl shadow-sm border border-[var(--color-border-light)] overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-[var(--color-surface)] text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
+                    <th className="text-left px-4 py-3 font-semibold">Etudiant</th>
+                    <th className="text-left px-4 py-3 font-semibold hidden md:table-cell">Cours</th>
+                    <th className="text-left px-4 py-3 font-semibold hidden sm:table-cell">Date</th>
+                    <th className="text-left px-4 py-3 font-semibold">Raison</th>
+                    <th className="text-center px-4 py-3 font-semibold">Statut</th>
+                    <th className="text-center px-4 py-3 font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border-light)]">
+                  {justifications?.map((j) => (
+                    <tr key={j.id} className="hover:bg-[var(--color-surface)] transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-[var(--color-text)] text-sm">{j.student_name}</div>
+                        <div className="text-xs text-[var(--color-text-muted)]">{j.student_email}</div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-[var(--color-text-secondary)] hidden md:table-cell">
+                        {j.course_name}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-[var(--color-text-muted)] hidden sm:table-cell">
+                        {new Date(j.course_date).toLocaleDateString("fr-FR")}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-[var(--color-text)]">
+                        <div className="flex items-center gap-1.5">
+                          <span className="max-w-[200px] truncate">{j.reason}</span>
+                          {j.file_urls.length > 0 && (
+                            <a
+                              href={`${API_URL}${j.file_urls[0]}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[var(--color-accent)] hover:text-[var(--color-primary)] flex-shrink-0"
+                              title="Voir le fichier joint"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                              </svg>
+                            </a>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span
+                          className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${
+                            j.status === "pending"
+                              ? "bg-[var(--color-warning-bg)] text-[var(--color-warning)]"
+                              : j.status === "approved"
+                                ? "bg-[var(--color-success-bg)] text-[var(--color-success)]"
+                                : "bg-[var(--color-danger-bg)] text-[var(--color-danger)]"
+                          }`}
+                        >
+                          {j.status === "pending" ? "En attente" : j.status === "approved" ? "Approuvee" : "Refusee"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {j.status === "pending" ? (
+                          reviewingId === j.id ? (
+                            <div className="flex flex-col gap-2 min-w-[180px]">
+                              <textarea
+                                value={rejectComment}
+                                onChange={(e) => setRejectComment(e.target.value)}
+                                placeholder="Commentaire (optionnel)..."
+                                className="text-xs px-2 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] resize-none"
+                                rows={2}
+                              />
+                              <div className="flex gap-1.5">
+                                <button
+                                  disabled={reviewLoading}
+                                  onClick={async () => {
+                                    setReviewLoading(true);
+                                    try {
+                                      await reviewJustification(j.id, "rejected", rejectComment || undefined);
+                                      await mutate((key: string) => typeof key === "string" && key.startsWith("admin-justifications"));
+                                      setReviewingId(null);
+                                      setRejectComment("");
+                                    } catch { /* ignore */ } finally {
+                                      setReviewLoading(false);
+                                    }
+                                  }}
+                                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[var(--color-danger)] text-white hover:opacity-90 transition-opacity disabled:opacity-50 flex-1"
+                                >
+                                  {reviewLoading ? "..." : "Confirmer"}
+                                </button>
+                                <button
+                                  onClick={() => { setReviewingId(null); setRejectComment(""); }}
+                                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:bg-[var(--color-border-light)] transition-colors"
+                                >
+                                  Annuler
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                disabled={reviewLoading}
+                                onClick={async () => {
+                                  setReviewLoading(true);
+                                  try {
+                                    await reviewJustification(j.id, "approved");
+                                    await mutate((key: string) => typeof key === "string" && key.startsWith("admin-justifications"));
+                                  } catch { /* ignore */ } finally {
+                                    setReviewLoading(false);
+                                  }
+                                }}
+                                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[var(--color-success)] text-white hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-1"
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                  <path d="M20 6L9 17l-5-5" />
+                                </svg>
+                                Approuver
+                              </button>
+                              <button
+                                onClick={() => setReviewingId(j.id)}
+                                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[var(--color-danger)] text-white hover:opacity-90 transition-opacity flex items-center gap-1"
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                  <line x1="18" y1="6" x2="6" y2="18" />
+                                  <line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
+                                Refuser
+                              </button>
+                            </div>
+                          )
+                        ) : (
+                          <span className="text-xs text-[var(--color-text-muted)]">
+                            {j.reviewed_by_name ? `Par ${j.reviewed_by_name}` : "\u2014"}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {justifications?.length === 0 && (
+              <div className="text-center py-12 text-[var(--color-text-muted)] text-sm">
+                Aucun justificatif trouve
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Students Table */}

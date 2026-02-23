@@ -50,3 +50,34 @@ export function useAdminStudents() {
       api.get<StudentWithAttendance[]>("/api/v1/admin/students"),
   });
 }
+
+export interface AdminJustification {
+  id: string;
+  student_name: string;
+  student_email: string;
+  course_name: string;
+  course_date: string;
+  record_status: string;
+  reason: string;
+  file_urls: string[];
+  status: string;
+  created_at: string;
+  reviewed_at: string | null;
+  reviewed_by_name: string | null;
+  comment: string | null;
+}
+
+export function useAdminJustifications(status?: string) {
+  const params = status ? `?status=${status}` : "";
+  return useSWR<AdminJustification[]>(`admin-justifications-${status || "all"}`, {
+    fetcher: () => api.get<AdminJustification[]>(`/api/v1/admin/justifications${params}`),
+    refreshInterval: 15000,
+  });
+}
+
+export async function reviewJustification(id: string, decision: string, comment?: string) {
+  return api.put<{ ok: boolean; status: string }>(`/api/v1/admin/justifications/${id}/review`, {
+    decision,
+    comment,
+  });
+}
