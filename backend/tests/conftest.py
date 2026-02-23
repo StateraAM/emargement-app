@@ -106,6 +106,33 @@ async def setup_database():
         for s in students[:3]:
             db.add(CourseEnrollment(id=uuid.uuid4(), course_id=course2.id, student_id=s.id))
 
+        await db.flush()
+
+        # Seed an absent attendance record for justification tests
+        # Use students[3] (David Roux) + course1 to avoid conflict with test_validate_attendance
+        # which inserts records for students[0..2] in course1
+        absent_record = AttendanceRecord(
+            id=uuid.uuid4(),
+            course_id=course1.id,
+            student_id=students[3].id,
+            status="absent",
+            marked_by_prof_at=datetime.combine(today, time(9, 30)),
+            signature_token=uuid.uuid4(),
+            signature_token_expires=datetime.combine(today, time(9, 30)) + timedelta(hours=24),
+        )
+        db.add(absent_record)
+        await db.flush()
+
+        # Seed a pending justification linked to the absent record
+        justification = Justification(
+            id=uuid.uuid4(),
+            attendance_record_id=absent_record.id,
+            student_id=students[3].id,
+            reason="Rendez-vous medical",
+            status="pending",
+        )
+        db.add(justification)
+
         await db.commit()
 
     yield
