@@ -48,23 +48,13 @@ export default function SignaturePage() {
     const canvas = canvasRef.current;
     if (!canvas || signed || loading || error) return;
 
-    const parent = canvas.parentElement;
-    if (parent) {
-      const width = parent.clientWidth;
-      canvas.width = width;
-      canvas.height = 180;
-      canvas.style.width = width + "px";
-      canvas.style.height = "180px";
-    }
-
-    const pad = new SignaturePad(canvas, {
-      backgroundColor: "rgb(255, 255, 255)",
+    sigPadRef.current = new SignaturePad(canvas, {
       penColor: "#000000",
+      backgroundColor: "rgb(255, 255, 255)",
     });
-    sigPadRef.current = pad;
 
     return () => {
-      pad.off();
+      sigPadRef.current?.off();
     };
   }, [signed, loading, error]);
 
@@ -222,10 +212,12 @@ export default function SignaturePage() {
           <label className="block text-sm font-semibold text-[var(--color-text)] mb-2">
             Votre signature
           </label>
-          <div className="border-2 border-dashed border-[var(--color-border)] rounded-xl overflow-hidden bg-white">
+          <div className="border-2 border-dashed border-[var(--color-border)] rounded-xl bg-white">
             <canvas
               ref={canvasRef}
-              style={{ width: "100%", height: "180px", display: "block", touchAction: "none" }}
+              width={350}
+              height={180}
+              style={{ display: "block", cursor: "crosshair", touchAction: "none" }}
             />
           </div>
           <button
