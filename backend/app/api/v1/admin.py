@@ -10,6 +10,7 @@ from app.models.course import Course
 from app.models.course_enrollment import CourseEnrollment
 from app.models.attendance_record import AttendanceRecord
 from app.schemas.student import StudentWithAttendanceResponse
+from app.schemas.auth import ProfessorResponse
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -44,6 +45,18 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
         "total_attendance_records": total_records,
         "low_attendance_alerts": low_attendance_count,
     }
+
+
+@router.get("/professors", response_model=list[ProfessorResponse])
+async def get_professors(db: AsyncSession = Depends(get_db)):
+    professors = (await db.execute(select(Professor).order_by(Professor.last_name))).scalars().all()
+    return [
+        ProfessorResponse(
+            id=str(p.id), email=p.email, first_name=p.first_name,
+            last_name=p.last_name, role=p.role,
+        )
+        for p in professors
+    ]
 
 
 @router.get("/students", response_model=list[StudentWithAttendanceResponse])

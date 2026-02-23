@@ -30,6 +30,20 @@ export function useAdminStats() {
   });
 }
 
+export interface ProfessorInfo {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+}
+
+export function useAdminProfessors() {
+  return useSWR<ProfessorInfo[]>("admin-professors", {
+    fetcher: () => api.get<ProfessorInfo[]>("/api/v1/admin/professors"),
+  });
+}
+
 export function useAdminStudents() {
   return useSWR<StudentWithAttendance[]>("admin-students", {
     fetcher: () =>

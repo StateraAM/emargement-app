@@ -1,6 +1,6 @@
 "use client";
 import { useAuth } from "@/hooks/use-auth";
-import { useAdminStats, useAdminStudents } from "@/hooks/use-admin";
+import { useAdminStats, useAdminStudents, useAdminProfessors } from "@/hooks/use-admin";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -8,6 +8,7 @@ export default function AdminPage() {
   const { professor, loading, logout, isAdmin } = useAuth();
   const { data: stats } = useAdminStats();
   const { data: students } = useAdminStudents();
+  const { data: professors } = useAdminProfessors();
   const router = useRouter();
   const [search, setSearch] = useState("");
 
@@ -237,6 +238,67 @@ export default function AdminPage() {
           {filteredStudents?.length === 0 && (
             <div className="text-center py-12 text-[var(--color-text-muted)] text-sm">
               Aucun etudiant trouve
+            </div>
+          )}
+        </div>
+
+        {/* Professors Table */}
+        <div className="bg-[var(--color-surface-card)] rounded-2xl shadow-sm border border-[var(--color-border-light)] overflow-hidden mt-8">
+          <div className="px-5 py-4 border-b border-[var(--color-border-light)]">
+            <h2
+              className="text-lg font-bold text-[var(--color-text)]"
+              style={{ fontFamily: "var(--font-playfair)" }}
+            >
+              Professeurs
+            </h2>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-[var(--color-surface)] text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
+                  <th className="text-left px-5 py-3 font-semibold">Nom</th>
+                  <th className="text-left px-5 py-3 font-semibold hidden md:table-cell">Email</th>
+                  <th className="text-center px-5 py-3 font-semibold">Role</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border-light)]">
+                {professors?.map((p) => (
+                  <tr
+                    key={p.id}
+                    className="hover:bg-[var(--color-surface)] transition-colors"
+                  >
+                    <td className="px-5 py-3.5">
+                      <span className="font-semibold text-[var(--color-text)]">
+                        {p.last_name}
+                      </span>{" "}
+                      <span className="text-[var(--color-text-secondary)]">
+                        {p.first_name}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 text-[var(--color-text-muted)] hidden md:table-cell">
+                      {p.email}
+                    </td>
+                    <td className="px-5 py-3.5 text-center">
+                      <span
+                        className={`inline-flex items-center justify-center min-w-[4rem] px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                          p.role === "admin"
+                            ? "bg-[var(--color-accent)]/15 text-[var(--color-accent)]"
+                            : "bg-[var(--color-primary)]/10 text-[var(--color-primary)]"
+                        }`}
+                      >
+                        {p.role === "admin" ? "Admin" : "Professeur"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {professors?.length === 0 && (
+            <div className="text-center py-12 text-[var(--color-text-muted)] text-sm">
+              Aucun professeur trouve
             </div>
           )}
         </div>
