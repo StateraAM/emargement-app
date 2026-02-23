@@ -48,20 +48,26 @@ export default function StudentSignPage() {
   }, [authLoading, user, isStudent, id]);
 
   useEffect(() => {
-    if (canvasRef.current && !signed && !loading && !error) {
-      const canvas = canvasRef.current;
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width;
-      canvas.height = rect.height;
+    const canvas = canvasRef.current;
+    if (!canvas || signed || loading || error) return;
 
-      sigPadRef.current = new SignaturePad(canvas, {
-        backgroundColor: "rgb(255, 255, 255)",
-        penColor: "#1e3a5f",
-      });
+    const parent = canvas.parentElement;
+    if (parent) {
+      const width = parent.clientWidth;
+      canvas.width = width;
+      canvas.height = 180;
+      canvas.style.width = width + "px";
+      canvas.style.height = "180px";
     }
 
+    const pad = new SignaturePad(canvas, {
+      backgroundColor: "rgb(255, 255, 255)",
+      penColor: "#000000",
+    });
+    sigPadRef.current = pad;
+
     return () => {
-      sigPadRef.current?.off();
+      pad.off();
     };
   }, [signed, loading, error]);
 
@@ -170,8 +176,7 @@ export default function StudentSignPage() {
           <div className="border-2 border-dashed border-[var(--color-border)] rounded-xl overflow-hidden bg-white">
             <canvas
               ref={canvasRef}
-              className="w-full touch-none"
-              style={{ height: "180px", display: "block" }}
+              style={{ width: "100%", height: "180px", display: "block", touchAction: "none" }}
             />
           </div>
           <button
