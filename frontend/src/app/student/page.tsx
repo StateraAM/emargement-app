@@ -2,7 +2,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useNotifications } from "@/hooks/use-notifications";
 import { useJustifications } from "@/hooks/use-justifications";
-import { NotificationBell } from "@/components/notification-bell";
+import { StudentHeader } from "@/components/student-header";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import useSWR from "swr";
@@ -108,7 +108,7 @@ export default function StudentDashboardPage() {
 }
 
 function StudentDashboard() {
-  const { user, loading: authLoading, logout, isStudent } = useAuth();
+  const { user, loading: authLoading, isStudent } = useAuth();
   const { notifications } = useNotifications();
   const { justifications } = useJustifications();
   const { data: history, isLoading: historyLoading } = useAttendanceHistory();
@@ -160,52 +160,7 @@ function StudentDashboard() {
 
   return (
     <div className="min-h-screen bg-[var(--color-surface)]">
-      {/* Header */}
-      <header className="bg-[var(--color-primary)] text-white">
-        <div className="max-w-lg mx-auto px-4 py-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1
-                className="text-xl font-bold tracking-tight"
-                style={{ fontFamily: "var(--font-playfair)" }}
-              >
-                Emargement
-              </h1>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-medium text-white/90">
-                  {user.first_name} {user.last_name}
-                </p>
-              </div>
-              <NotificationBell />
-              <button
-                onClick={() => {
-                  logout();
-                  router.push("/login");
-                }}
-                className="flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition-colors bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
-                  <polyline points="16 17 21 12 16 7" />
-                  <line x1="21" y1="12" x2="9" y2="12" />
-                </svg>
-                Quitter
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <StudentHeader />
 
       {/* Content */}
       <main className="max-w-lg mx-auto px-4 py-6 animate-fade-in">

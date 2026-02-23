@@ -2,6 +2,7 @@
 import { useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
+import { StudentHeader } from "@/components/student-header";
 import { submitJustification } from "@/hooks/use-justifications";
 
 function formatFileSize(bytes: number): string {
@@ -70,37 +71,7 @@ export default function JustifyPage() {
 
   return (
     <div className="min-h-screen bg-[var(--color-surface)]">
-      {/* Header */}
-      <header className="bg-[var(--color-primary)] text-white">
-        <div className="max-w-lg mx-auto px-4 py-4">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push("/student")}
-              className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M19 12H5" />
-                <path d="M12 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <h1
-              className="text-xl font-bold tracking-tight"
-              style={{ fontFamily: "var(--font-playfair)" }}
-            >
-              Justifier une absence
-            </h1>
-          </div>
-        </div>
-      </header>
+      <StudentHeader title="Justifier une absence" showBack />
 
       {/* Content */}
       <main className="max-w-lg mx-auto px-4 py-6 animate-fade-in">

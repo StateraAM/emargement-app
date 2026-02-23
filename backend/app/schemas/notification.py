@@ -9,6 +9,7 @@ class NotificationResponse(BaseModel):
     title: str
     message: str
     data: Optional[str] = None
+    record_id: Optional[str] = None
     is_read: bool
     created_at: datetime
 

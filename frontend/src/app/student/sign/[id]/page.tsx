@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/lib/api";
+import { StudentHeader } from "@/components/student-header";
 import SignaturePad from "signature_pad";
 
 interface RecordInfo {
@@ -113,43 +114,46 @@ export default function StudentSignPage() {
 
   if (signed) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--color-surface)] p-4">
-        <div className="bg-[var(--color-surface-card)] rounded-2xl p-8 shadow-sm border border-[var(--color-border-light)] text-center max-w-sm w-full animate-fade-in">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[var(--color-success-bg)] mb-5">
-            <svg
-              width="28"
-              height="28"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="var(--color-success)"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+      <div className="min-h-screen bg-[var(--color-surface)]">
+        <StudentHeader title="Signer ma presence" showBack />
+        <div className="flex items-center justify-center p-4 mt-8">
+          <div className="bg-[var(--color-surface-card)] rounded-2xl p-8 shadow-sm border border-[var(--color-border-light)] text-center max-w-sm w-full animate-fade-in">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[var(--color-success-bg)] mb-5">
+              <svg
+                width="28"
+                height="28"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--color-success)"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M9 12l2 2 4-4" />
+                <circle cx="12" cy="12" r="10" />
+              </svg>
+            </div>
+            <h2
+              className="text-2xl font-bold text-[var(--color-text)] mb-2"
+              style={{ fontFamily: "var(--font-playfair)" }}
             >
-              <path d="M9 12l2 2 4-4" />
-              <circle cx="12" cy="12" r="10" />
-            </svg>
-          </div>
-          <h2
-            className="text-2xl font-bold text-[var(--color-text)] mb-2"
-            style={{ fontFamily: "var(--font-playfair)" }}
-          >
-            Presence signee
-          </h2>
-          <p className="text-[var(--color-text-secondary)] text-sm">
-            Votre presence au cours{" "}
-            <strong className="text-[var(--color-text)]">
-              {info?.course_name}
-            </strong>{" "}
-            a ete enregistree avec succes.
-          </p>
-          <div className="mt-6">
-            <button
-              onClick={() => router.push("/student")}
-              className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-xl bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-dark)] active:scale-[0.97] transition-all"
-            >
-              Retour au tableau de bord
-            </button>
+              Presence signee
+            </h2>
+            <p className="text-[var(--color-text-secondary)] text-sm">
+              Votre presence au cours{" "}
+              <strong className="text-[var(--color-text)]">
+                {info?.course_name}
+              </strong>{" "}
+              a ete enregistree avec succes.
+            </p>
+            <div className="mt-6">
+              <button
+                onClick={() => router.push("/student")}
+                className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-xl bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-dark)] active:scale-[0.97] transition-all"
+              >
+                Retour au tableau de bord
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -157,30 +161,10 @@ export default function StudentSignPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--color-surface)] p-4">
-      <div className="bg-[var(--color-surface-card)] rounded-2xl p-8 shadow-sm border border-[var(--color-border-light)] max-w-sm w-full animate-fade-in">
-        {/* Brand */}
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[var(--color-primary)] mb-3">
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="white"
-              strokeWidth="2"
-            >
-              <path d="M12 20h9" />
-              <path d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z" />
-            </svg>
-          </div>
-          <h1
-            className="text-xl font-bold text-[var(--color-text)]"
-            style={{ fontFamily: "var(--font-playfair)" }}
-          >
-            Signer ma presence
-          </h1>
-        </div>
+    <div className="min-h-screen bg-[var(--color-surface)]">
+      <StudentHeader title="Signer ma presence" showBack />
+      <div className="flex items-center justify-center p-4 mt-4">
+        <div className="bg-[var(--color-surface-card)] rounded-2xl p-8 shadow-sm border border-[var(--color-border-light)] max-w-sm w-full animate-fade-in">
 
         {/* Course info */}
         {info && (
@@ -261,6 +245,7 @@ export default function StudentSignPage() {
             "Valider ma signature"
           )}
         </button>
+        </div>
       </div>
     </div>
   );

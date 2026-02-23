@@ -39,14 +39,21 @@ async def list_notifications(
     )
     result = await db.execute(stmt)
     notifications = result.scalars().all()
-    return [
-        NotificationResponse(
+    responses = []
+    for n in notifications:
+        record_id = None
+        if n.data:
+            try:
+                parsed = json.loads(n.data)
+                record_id = parsed.get("record_id")
+            except (json.JSONDecodeError, TypeError):
+                pass
+        responses.append(NotificationResponse(
             id=str(n.id), type=n.type, title=n.title,
-            message=n.message, data=n.data, is_read=n.is_read,
-            created_at=n.created_at,
-        )
-        for n in notifications
-    ]
+            message=n.message, data=n.data, record_id=record_id,
+            is_read=n.is_read, created_at=n.created_at,
+        ))
+    return responses
 
 
 @router.get("/notifications/unread-count")
