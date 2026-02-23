@@ -1,9 +1,10 @@
 "use client";
 import { useAuth } from "@/hooks/use-auth";
 import { useNotifications } from "@/hooks/use-notifications";
+import { useJustifications } from "@/hooks/use-justifications";
 import { NotificationBell } from "@/components/notification-bell";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import useSWR from "swr";
 import { api } from "@/lib/api";
 
@@ -11,8 +12,11 @@ interface AttendanceRecord {
   id: string;
   course_name: string;
   course_date: string;
+  room: string | null;
   status: string;
   signed_at: string | null;
+  justification_status: string | null;
+  justification_id: string | null;
 }
 
 function useAttendanceHistory() {
@@ -59,11 +63,66 @@ function statusLabel(status: string): { text: string; className: string } {
   }
 }
 
-export default function StudentDashboard() {
+function justificationBadge(status: string): { text: string; className: string } {
+  switch (status) {
+    case "pending":
+      return {
+        text: "En attente",
+        className:
+          "bg-[var(--color-warning-bg)] text-[var(--color-warning)] border border-[var(--color-warning-border)]",
+      };
+    case "approved":
+      return {
+        text: "Approuvee",
+        className:
+          "bg-[var(--color-success-bg)] text-[var(--color-success)] border border-[var(--color-success-border)]",
+      };
+    case "rejected":
+      return {
+        text: "Refusee",
+        className:
+          "bg-[var(--color-danger-bg)] text-[var(--color-danger)] border border-[var(--color-danger-border)]",
+      };
+    default:
+      return {
+        text: status,
+        className:
+          "bg-[var(--color-border-light)] text-[var(--color-text-muted)]",
+      };
+  }
+}
+
+export default function StudentDashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--color-surface)]">
+          <div className="w-8 h-8 border-3 border-[var(--color-primary)]/20 border-t-[var(--color-primary)] rounded-full animate-spin mb-4" />
+          <p className="text-[var(--color-text-muted)] text-sm">Chargement...</p>
+        </div>
+      }
+    >
+      <StudentDashboard />
+    </Suspense>
+  );
+}
+
+function StudentDashboard() {
   const { user, loading: authLoading, logout, isStudent } = useAuth();
   const { notifications } = useNotifications();
+  const { justifications } = useJustifications();
   const { data: history, isLoading: historyLoading } = useAttendanceHistory();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [showSuccess, setShowSuccess] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("justified") === "1") {
+      setShowSuccess(true);
+      const timer = setTimeout(() => setShowSuccess(false), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!authLoading && (!user || !isStudent)) {
@@ -85,6 +144,19 @@ export default function StudentDashboard() {
   const pendingSignatures = notifications.filter(
     (n) => n.type === "signature_request" && !n.is_read
   );
+
+  const getJustificationStatus = (record: AttendanceRecord): string | null => {
+    if (record.justification_status) return record.justification_status;
+    const found = justifications.find((j) => j.record_id === record.id);
+    return found?.status ?? null;
+  };
+
+  const canJustify = (record: AttendanceRecord): boolean => {
+    return (
+      (record.status === "absent" || record.status === "late") &&
+      !getJustificationStatus(record)
+    );
+  };
 
   return (
     <div className="min-h-screen bg-[var(--color-surface)]">
@@ -137,6 +209,28 @@ export default function StudentDashboard() {
 
       {/* Content */}
       <main className="max-w-lg mx-auto px-4 py-6 animate-fade-in">
+        {/* Success message */}
+        {showSuccess && (
+          <div className="mb-6 flex items-center gap-2 text-[var(--color-success)] text-sm bg-[var(--color-success-bg)] px-4 py-3 rounded-xl border border-[var(--color-success-border)] animate-fade-in">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M9 12l2 2 4-4" />
+              <circle cx="12" cy="12" r="10" />
+            </svg>
+            <span className="font-medium">
+              Justification envoyee avec succes.
+            </span>
+          </div>
+        )}
+
         {/* Pending Signatures */}
         <section className="mb-8">
           <h2
@@ -235,42 +329,52 @@ export default function StudentDashboard() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-[var(--color-border-light)] bg-[var(--color-surface)]">
-                      <th className="text-left px-4 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
+                      <th className="text-left px-3 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
                         Date
                       </th>
-                      <th className="text-left px-4 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
+                      <th className="text-left px-3 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
                         Cours
                       </th>
-                      <th className="text-center px-4 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
+                      <th className="text-left px-3 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
+                        Salle
+                      </th>
+                      <th className="text-center px-3 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
                         Statut
                       </th>
-                      <th className="text-center px-4 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
+                      <th className="text-center px-3 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
                         Signe
+                      </th>
+                      <th className="text-center px-3 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
+                        Justification
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     {history.map((record) => {
                       const status = statusLabel(record.status);
+                      const justStatus = getJustificationStatus(record);
                       return (
                         <tr
                           key={record.id}
                           className="border-b border-[var(--color-border-light)] last:border-b-0"
                         >
-                          <td className="px-4 py-3 text-[var(--color-text-secondary)] whitespace-nowrap">
+                          <td className="px-3 py-3 text-[var(--color-text-secondary)] whitespace-nowrap">
                             {formatDate(record.course_date)}
                           </td>
-                          <td className="px-4 py-3 text-[var(--color-text)] font-medium">
+                          <td className="px-3 py-3 text-[var(--color-text)] font-medium">
                             {record.course_name}
                           </td>
-                          <td className="px-4 py-3 text-center">
+                          <td className="px-3 py-3 text-[var(--color-text-secondary)] whitespace-nowrap">
+                            {record.room || "—"}
+                          </td>
+                          <td className="px-3 py-3 text-center">
                             <span
                               className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${status.className}`}
                             >
                               {status.text}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-center">
+                          <td className="px-3 py-3 text-center">
                             {record.signed_at ? (
                               <svg
                                 className="inline"
@@ -286,6 +390,28 @@ export default function StudentDashboard() {
                                 <path d="M9 12l2 2 4-4" />
                                 <circle cx="12" cy="12" r="10" />
                               </svg>
+                            ) : (
+                              <span className="text-[var(--color-text-muted)]">
+                                —
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            {justStatus ? (
+                              <span
+                                className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${justificationBadge(justStatus).className}`}
+                              >
+                                {justificationBadge(justStatus).text}
+                              </span>
+                            ) : canJustify(record) ? (
+                              <button
+                                onClick={() =>
+                                  router.push(`/student/justify/${record.id}`)
+                                }
+                                className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-dark)] active:scale-[0.97] transition-all"
+                              >
+                                Justifier
+                              </button>
                             ) : (
                               <span className="text-[var(--color-text-muted)]">
                                 —

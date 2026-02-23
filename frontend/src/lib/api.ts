@@ -78,6 +78,30 @@ class ApiClient {
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   }
+
+  async postFormData<T>(path: string, formData: FormData): Promise<T> {
+    const headers: Record<string, string> = {};
+    const token = this.getToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const res = await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    if (!res.ok) {
+      if (res.status === 401) {
+        this.clearToken();
+        if (typeof window !== "undefined") {
+          window.location.href = "/login";
+        }
+      }
+      const errorBody = await res.text().catch(() => "");
+      throw new Error(errorBody || `API error: ${res.status}`);
+    }
+    return res.json();
+  }
 }
 
 export const api = new ApiClient();
