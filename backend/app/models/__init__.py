@@ -7,9 +7,10 @@ from app.models.attendance_record import AttendanceRecord
 from app.models.monthly_report import MonthlyReport
 from app.models.notification import Notification
 from app.models.justification import Justification
+from app.models.audit_log import AuditLog
 
 __all__ = [
     "Professor", "Student", "StudentContact",
     "Course", "CourseEnrollment", "AttendanceRecord", "MonthlyReport",
-    "Notification", "Justification",
+    "Notification", "Justification", "AuditLog",
 ]

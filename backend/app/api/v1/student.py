@@ -4,7 +4,7 @@ import uuid as uuid_mod
 from uuid import UUID
 from datetime import datetime
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update
@@ -19,6 +19,7 @@ from app.models.professor import Professor
 from app.models.justification import Justification
 from app.schemas.notification import NotificationResponse
 from app.schemas.attendance import SignatureSubmitRequest
+from app.services.audit import create_audit_log
 
 router = APIRouter(prefix="/student", tags=["student"])
 
@@ -166,6 +167,7 @@ async def get_attendance_record(
 @router.post("/sign/{record_id}")
 async def sign_attendance_record(
     record_id: str,
+    request: Request,
     body: SignatureSubmitRequest = SignatureSubmitRequest(),
     student: Student = Depends(get_current_student),
     db: AsyncSession = Depends(get_db),
@@ -207,6 +209,11 @@ async def sign_attendance_record(
         except (json.JSONDecodeError, TypeError):
             pass
 
+    await create_audit_log(
+        db, "signature", "student", student.id, "attendance_record", record.id,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
     await db.commit()
 
     return {"ok": True, "signed_at": record.signed_at.isoformat()}
@@ -215,6 +222,7 @@ async def sign_attendance_record(
 @router.post("/justify/{record_id}")
 async def justify_absence(
     record_id: str,
+    request: Request,
     reason: str = Form(...),
     files: list[UploadFile] = File(default=[]),
     student: Student = Depends(get_current_student),
@@ -272,6 +280,11 @@ async def justify_absence(
         status="pending",
     )
     db.add(justification)
+    await create_audit_log(
+        db, "justification_submit", "student", student.id, "justification", justification.id,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
     await db.commit()
 
     return {

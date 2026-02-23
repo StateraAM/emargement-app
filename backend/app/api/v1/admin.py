@@ -1,10 +1,12 @@
+import csv
+import io
 import json
 from datetime import date, datetime, time
 from pathlib import Path
 from typing import Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.core.database import get_db
@@ -16,9 +18,11 @@ from app.models.course_enrollment import CourseEnrollment
 from app.models.attendance_record import AttendanceRecord
 from app.models.justification import Justification
 from app.models.notification import Notification
+from app.models.audit_log import AuditLog
 from app.schemas.student import StudentWithAttendanceResponse
 from app.schemas.auth import ProfessorResponse
 from app.schemas.attendance import JustificationAdminResponse, ReviewJustificationRequest
+from app.services.audit import create_audit_log
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -149,6 +153,7 @@ async def list_justifications(
 async def review_justification(
     justification_id: str,
     body: ReviewJustificationRequest,
+    request: Request,
     professor: Professor = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -175,6 +180,12 @@ async def review_justification(
         data=json.dumps({"justification_id": str(justif.id), "decision": body.decision}),
     )
     db.add(notification)
+    await create_audit_log(
+        db, "justification_review", "admin", professor.id, "justification", justif.id,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        metadata={"decision": body.decision, "comment": body.comment},
+    )
     await db.commit()
     return {"ok": True, "status": justif.status}
 
@@ -195,3 +206,80 @@ async def serve_justification_file_admin(
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_path)
+
+
+# ---------- Audit logs ----------
+
+
+@router.get("/audit-logs")
+async def list_audit_logs(
+    event_type: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(AuditLog).order_by(AuditLog.created_at.desc())
+    if event_type:
+        stmt = stmt.where(AuditLog.event_type == event_type)
+    if start_date:
+        stmt = stmt.where(AuditLog.created_at >= datetime.fromisoformat(start_date))
+    if end_date:
+        stmt = stmt.where(AuditLog.created_at <= datetime.fromisoformat(end_date))
+    stmt = stmt.offset(offset).limit(limit)
+    result = await db.execute(stmt)
+    logs = result.scalars().all()
+
+    responses = []
+    for log in logs:
+        actor_name = None
+        if log.actor_type == "student":
+            s = (await db.execute(select(Student).where(Student.id == log.actor_id))).scalar_one_or_none()
+            actor_name = f"{s.first_name} {s.last_name}" if s else "Unknown"
+        else:
+            p = (await db.execute(select(Professor).where(Professor.id == log.actor_id))).scalar_one_or_none()
+            actor_name = f"{p.first_name} {p.last_name}" if p else "Unknown"
+        responses.append({
+            "id": str(log.id),
+            "event_type": log.event_type,
+            "actor_type": log.actor_type,
+            "actor_name": actor_name,
+            "target_type": log.target_type,
+            "target_id": str(log.target_id),
+            "ip_address": log.ip_address,
+            "user_agent": log.user_agent,
+            "metadata": json.loads(log.extra_data) if log.extra_data else None,
+            "created_at": log.created_at.isoformat(),
+        })
+    return responses
+
+
+@router.get("/audit-logs/export-csv")
+async def export_audit_logs_csv(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(AuditLog).order_by(AuditLog.created_at.desc())
+    if start_date:
+        stmt = stmt.where(AuditLog.created_at >= datetime.fromisoformat(start_date))
+    if end_date:
+        stmt = stmt.where(AuditLog.created_at <= datetime.fromisoformat(end_date))
+    result = await db.execute(stmt)
+    logs = result.scalars().all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Date", "Type", "Acteur", "Cible", "IP", "User-Agent", "Metadata"])
+    for log in logs:
+        writer.writerow([
+            log.created_at.isoformat(), log.event_type,
+            f"{log.actor_type}:{log.actor_id}", f"{log.target_type}:{log.target_id}",
+            log.ip_address or "", log.user_agent or "", log.extra_data or "",
+        ])
+    output.seek(0)
+    return StreamingResponse(
+        output, media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=audit_logs.csv"},
+    )

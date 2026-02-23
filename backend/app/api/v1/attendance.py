@@ -2,7 +2,7 @@ import uuid
 import json
 from uuid import UUID
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -16,6 +16,7 @@ from app.models.notification import Notification
 from app.schemas.attendance import ValidateAttendanceRequest, AttendanceRecordResponse, AttendanceStatusResponse
 from app.services.email import email_service
 from app.services.qrcode import generate_qr_code
+from app.services.audit import create_audit_log
 from app.core.config import settings
 
 router = APIRouter(prefix="/attendance", tags=["attendance"])
@@ -24,6 +25,7 @@ router = APIRouter(prefix="/attendance", tags=["attendance"])
 @router.post("/validate", response_model=list[AttendanceRecordResponse])
 async def validate_attendance(
     request: ValidateAttendanceRequest,
+    req: Request,
     professor: Professor = Depends(get_current_professor),
     db: AsyncSession = Depends(get_db),
 ):
@@ -75,6 +77,11 @@ async def validate_attendance(
             )
             db.add(notification)
 
+    await create_audit_log(
+        db, "attendance_validation", "professor", professor.id, "course", UUID(request.course_id),
+        ip_address=req.client.host if req.client else None,
+        user_agent=req.headers.get("user-agent"),
+    )
     await db.commit()
 
     return [
@@ -93,6 +100,7 @@ async def validate_attendance(
 @router.put("/validate", response_model=list[AttendanceRecordResponse])
 async def update_attendance(
     request: ValidateAttendanceRequest,
+    req: Request,
     professor: Professor = Depends(get_current_professor),
     db: AsyncSession = Depends(get_db),
 ):
@@ -164,8 +172,17 @@ async def update_attendance(
             )
             db.add(notification)
 
-        updated.append((record, student))
+        updated.append((record, student, old_status))
 
+    await create_audit_log(
+        db, "attendance_edit", "professor", professor.id, "course", UUID(request.course_id),
+        ip_address=req.client.host if req.client else None,
+        user_agent=req.headers.get("user-agent"),
+        metadata={"changes": [
+            {"student_id": str(r.student_id), "old_status": old, "new_status": r.status}
+            for r, _, old in updated
+        ]},
+    )
     await db.commit()
 
     return [
@@ -177,7 +194,7 @@ async def update_attendance(
             signed_at=record.signed_at,
             qr_signed_at=record.qr_signed_at,
         )
-        for record, student in updated
+        for record, student, _ in updated
     ]
 
 
