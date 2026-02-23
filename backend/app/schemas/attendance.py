@@ -46,3 +46,24 @@ class SignatureResponse(BaseModel):
     student_name: str
     already_signed: bool = False
     signed: bool = False
+
+
+class JustificationAdminResponse(BaseModel):
+    id: str
+    student_name: str
+    student_email: str
+    course_name: str
+    course_date: str
+    record_status: str
+    reason: str
+    file_urls: list[str]
+    status: str
+    created_at: datetime
+    reviewed_at: Optional[datetime] = None
+    reviewed_by_name: Optional[str] = None
+    comment: Optional[str] = None
+
+
+class ReviewJustificationRequest(BaseModel):
+    decision: str  # "approved" | "rejected"
+    comment: Optional[str] = None

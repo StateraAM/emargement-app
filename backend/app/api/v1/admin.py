@@ -1,5 +1,10 @@
+import json
 from datetime import date, datetime, time
-from fastapi import APIRouter, Depends
+from pathlib import Path
+from typing import Optional
+from uuid import UUID
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.core.database import get_db
@@ -9,8 +14,11 @@ from app.models.student import Student
 from app.models.course import Course
 from app.models.course_enrollment import CourseEnrollment
 from app.models.attendance_record import AttendanceRecord
+from app.models.justification import Justification
+from app.models.notification import Notification
 from app.schemas.student import StudentWithAttendanceResponse
 from app.schemas.auth import ProfessorResponse
+from app.schemas.attendance import JustificationAdminResponse, ReviewJustificationRequest
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -89,3 +97,101 @@ async def get_students(db: AsyncSession = Depends(get_db)):
             total_courses=total, attended=attended, absent=absent, late=late,
         ))
     return result
+
+
+# ---------- Justification management ----------
+
+UPLOADS_DIR = Path(__file__).resolve().parent.parent.parent.parent / "uploads" / "justifications"
+
+
+@router.get("/justifications", response_model=list[JustificationAdminResponse])
+async def list_justifications(
+    status: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = (
+        select(Justification, Student, AttendanceRecord, Course, Professor)
+        .join(Student, Justification.student_id == Student.id)
+        .join(AttendanceRecord, Justification.attendance_record_id == AttendanceRecord.id)
+        .join(Course, AttendanceRecord.course_id == Course.id)
+        .outerjoin(Professor, Justification.reviewed_by == Professor.id)
+        .order_by(Justification.created_at.desc())
+    )
+    if status:
+        stmt = stmt.where(Justification.status == status)
+    result = await db.execute(stmt)
+    rows = result.all()
+    responses = []
+    for justif, student, record, course, reviewer in rows:
+        file_names = json.loads(justif.file_paths) if justif.file_paths else []
+        file_urls = [
+            f"/api/v1/admin/justification-files/{justif.id}/{fname}"
+            for fname in file_names
+        ]
+        responses.append(JustificationAdminResponse(
+            id=str(justif.id),
+            student_name=f"{student.first_name} {student.last_name}",
+            student_email=student.email,
+            course_name=course.name,
+            course_date=course.start_time.strftime("%d/%m/%Y %H:%M"),
+            record_status=record.status,
+            reason=justif.reason,
+            file_urls=file_urls,
+            status=justif.status,
+            created_at=justif.created_at,
+            reviewed_at=justif.reviewed_at,
+            reviewed_by_name=f"{reviewer.first_name} {reviewer.last_name}" if reviewer else None,
+        ))
+    return responses
+
+
+@router.put("/justifications/{justification_id}/review")
+async def review_justification(
+    justification_id: str,
+    body: ReviewJustificationRequest,
+    professor: Professor = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(Justification).where(Justification.id == UUID(justification_id))
+    result = await db.execute(stmt)
+    justif = result.scalar_one_or_none()
+    if not justif:
+        raise HTTPException(status_code=404, detail="Justification not found")
+    if justif.status != "pending":
+        raise HTTPException(status_code=400, detail="Already reviewed")
+    if body.decision not in ("approved", "rejected"):
+        raise HTTPException(status_code=400, detail="Decision must be 'approved' or 'rejected'")
+
+    justif.status = body.decision
+    justif.reviewed_at = datetime.utcnow()
+    justif.reviewed_by = professor.id
+
+    decision_text = "approuvee" if body.decision == "approved" else "refusee"
+    notification = Notification(
+        student_id=justif.student_id,
+        type="justification_reviewed",
+        title=f"Justification {decision_text}",
+        message=f"Votre justification a ete {decision_text}." + (f" Commentaire: {body.comment}" if body.comment else ""),
+        data=json.dumps({"justification_id": str(justif.id), "decision": body.decision}),
+    )
+    db.add(notification)
+    await db.commit()
+    return {"ok": True, "status": justif.status}
+
+
+@router.get("/justification-files/{justification_id}/{filename}")
+async def serve_justification_file_admin(
+    justification_id: str,
+    filename: str,
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(Justification).where(Justification.id == UUID(justification_id))
+    result = await db.execute(stmt)
+    justif = result.scalar_one_or_none()
+    if not justif:
+        raise HTTPException(status_code=404, detail="Justification not found")
+    safe_filename = Path(filename).name
+    file_path = UPLOADS_DIR / justification_id / safe_filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(file_path)
