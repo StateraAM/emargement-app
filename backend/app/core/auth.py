@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.professor import Professor
+from app.models.student import Student
 
 pwd_context = CryptContext(schemes=["bcrypt"])
 security = HTTPBearer()
@@ -22,8 +23,9 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 
-def create_access_token(data: dict) -> str:
+def create_access_token(data: dict, user_type: str = "professor") -> str:
     to_encode = data.copy()
+    to_encode["user_type"] = user_type
     expire = datetime.utcnow() + timedelta(minutes=settings.JWT_EXPIRATION_MINUTES)
     to_encode["exp"] = expire
     return jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
@@ -35,6 +37,9 @@ async def get_current_professor(
 ) -> Professor:
     try:
         payload = jwt.decode(credentials.credentials, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        user_type = payload.get("user_type", "professor")
+        if user_type != "professor":
+            raise HTTPException(status_code=401, detail="Not a professor token")
         professor_id = payload.get("sub")
         if professor_id is None:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -47,6 +52,29 @@ async def get_current_professor(
     if professor is None:
         raise HTTPException(status_code=401, detail="Professor not found")
     return professor
+
+
+async def get_current_student(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db),
+) -> Student:
+    try:
+        payload = jwt.decode(credentials.credentials, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        user_type = payload.get("user_type")
+        if user_type != "student":
+            raise HTTPException(status_code=401, detail="Not a student token")
+        student_id = payload.get("sub")
+        if student_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        student_id = uuid_mod.UUID(student_id)
+    except (JWTError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    result = await db.execute(select(Student).where(Student.id == student_id))
+    student = result.scalar_one_or_none()
+    if student is None:
+        raise HTTPException(status_code=401, detail="Student not found")
+    return student
 
 
 async def require_admin(professor: Professor = Depends(get_current_professor)) -> Professor:

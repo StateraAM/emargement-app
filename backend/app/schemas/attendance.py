@@ -29,6 +29,10 @@ class SignatureRequest(BaseModel):
     pass  # No body needed, token is in URL path
 
 
+class SignatureSubmitRequest(BaseModel):
+    signature_data: Optional[str] = None
+
+
 class SignatureResponse(BaseModel):
     course_name: str
     course_date: str

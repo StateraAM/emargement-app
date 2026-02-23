@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel
 
 
@@ -17,6 +18,18 @@ class ProfessorResponse(BaseModel):
     first_name: str
     last_name: str
     role: str
+
+    class Config:
+        from_attributes = True
+
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    first_name: str
+    last_name: str
+    user_type: str
+    role: Optional[str] = None
 
     class Config:
         from_attributes = True

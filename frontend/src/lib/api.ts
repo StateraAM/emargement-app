@@ -17,10 +17,24 @@ class ApiClient {
     return this.token;
   }
 
+  setUserType(type: string) {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("user_type", type);
+    }
+  }
+
+  getUserType(): string | null {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("user_type");
+    }
+    return null;
+  }
+
   clearToken() {
     this.token = null;
     if (typeof window !== "undefined") {
       localStorage.removeItem("token");
+      localStorage.removeItem("user_type");
     }
   }
 
@@ -51,8 +65,18 @@ class ApiClient {
     return this.fetch<T>(path);
   }
 
-  post<T>(path: string, body: unknown) {
-    return this.fetch<T>(path, { method: "POST", body: JSON.stringify(body) });
+  post<T>(path: string, body?: unknown) {
+    return this.fetch<T>(path, {
+      method: "POST",
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  }
+
+  patch<T>(path: string, body?: unknown) {
+    return this.fetch<T>(path, {
+      method: "PATCH",
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
   }
 }
 

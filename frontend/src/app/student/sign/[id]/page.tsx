@@ -1,48 +1,50 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/use-auth";
+import { api } from "@/lib/api";
 import SignaturePad from "signature_pad";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-interface SignatureInfo {
+interface RecordInfo {
+  id: string;
   course_name: string;
   course_date: string;
   professor_name: string;
-  student_name: string;
-  already_signed: boolean;
+  status: string;
+  signed_at: string | null;
 }
 
-export default function SignaturePage() {
-  const { token } = useParams<{ token: string }>();
+export default function StudentSignPage() {
+  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const { user, loading: authLoading, isStudent } = useAuth();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sigPadRef = useRef<SignaturePad | null>(null);
-  const [info, setInfo] = useState<SignatureInfo | null>(null);
+
+  const [info, setInfo] = useState<RecordInfo | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [signing, setSigning] = useState(false);
   const [signed, setSigned] = useState(false);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/v1/signatures/info/${token}`)
-      .then((r) => {
-        if (r.status === 410) throw new Error("expired");
-        if (!r.ok) throw new Error("invalid");
-        return r.json();
-      })
-      .then((data) => {
-        setInfo(data);
-        if (data.already_signed) setSigned(true);
-      })
-      .catch((e) => {
-        setError(
-          e.message === "expired"
-            ? "Ce lien de signature a expire. Veuillez contacter votre professeur."
-            : "Lien invalide ou introuvable."
-        );
-      })
-      .finally(() => setLoading(false));
-  }, [token]);
+    if (!authLoading && (!user || !isStudent)) {
+      router.push("/login");
+    }
+  }, [authLoading, user, isStudent, router]);
+
+  useEffect(() => {
+    if (!authLoading && user && isStudent) {
+      api
+        .get<RecordInfo>(`/api/v1/student/attendance/${id}`)
+        .then((data) => {
+          setInfo(data);
+          if (data.signed_at) setSigned(true);
+        })
+        .catch(() => setError("Impossible de charger les informations."))
+        .finally(() => setLoading(false));
+    }
+  }, [authLoading, user, isStudent, id]);
 
   useEffect(() => {
     if (canvasRef.current && !signed && !loading && !error) {
@@ -77,14 +79,10 @@ export default function SignaturePage() {
     setError("");
     try {
       const signatureData = sigPadRef.current.toDataURL();
-      const r = await fetch(`${API_URL}/api/v1/signatures/sign/${token}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ signature_data: signatureData }),
+      await api.post(`/api/v1/student/sign/${id}`, {
+        signature_data: signatureData,
       });
-      if (!r.ok) throw new Error("sign_failed");
-      const data = await r.json();
-      if (data.signed || data.already_signed) setSigned(true);
+      setSigned(true);
     } catch {
       setError("Erreur lors de la signature. Veuillez reessayer.");
     } finally {
@@ -92,40 +90,11 @@ export default function SignaturePage() {
     }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--color-surface)]">
         <div className="w-8 h-8 border-3 border-[var(--color-primary)]/20 border-t-[var(--color-primary)] rounded-full animate-spin mb-4" />
         <p className="text-[var(--color-text-muted)] text-sm">Chargement...</p>
-      </div>
-    );
-  }
-
-  if (error && !info) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--color-surface)] p-4">
-        <div className="bg-[var(--color-surface-card)] rounded-2xl p-8 shadow-sm border border-[var(--color-border-light)] text-center max-w-sm w-full animate-fade-in">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[var(--color-danger-bg)] mb-5">
-            <svg
-              width="28"
-              height="28"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="var(--color-danger)"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-          </div>
-          <h2 className="text-lg font-bold text-[var(--color-text)] mb-2">
-            Lien invalide
-          </h2>
-          <p className="text-[var(--color-text-secondary)] text-sm">{error}</p>
-        </div>
       </div>
     );
   }
@@ -162,10 +131,13 @@ export default function SignaturePage() {
             </strong>{" "}
             a ete enregistree avec succes.
           </p>
-          <div className="mt-6 pt-6 border-t border-[var(--color-border-light)]">
-            <p className="text-xs text-[var(--color-text-muted)]">
-              Vous pouvez fermer cette page.
-            </p>
+          <div className="mt-6">
+            <button
+              onClick={() => router.push("/student")}
+              className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-xl bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-dark)] active:scale-[0.97] transition-all"
+            >
+              Retour au tableau de bord
+            </button>
           </div>
         </div>
       </div>
@@ -186,9 +158,8 @@ export default function SignaturePage() {
               stroke="white"
               strokeWidth="2"
             >
-              <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
-              <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-              <path d="M9 14l2 2 4-4" />
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z" />
             </svg>
           </div>
           <h1
@@ -200,17 +171,13 @@ export default function SignaturePage() {
         </div>
 
         {/* Course info */}
-        <div className="space-y-3 mb-6 bg-[var(--color-surface)] rounded-xl p-4 border border-[var(--color-border-light)]">
-          <InfoRow label="Cours" value={info?.course_name ?? ""} />
-          <InfoRow label="Date" value={info?.course_date ?? ""} />
-          <InfoRow label="Professeur" value={info?.professor_name ?? ""} />
-          <InfoRow label="Etudiant" value={info?.student_name ?? ""} bold />
-        </div>
-
-        <p className="text-xs text-[var(--color-text-muted)] mb-5 text-center leading-relaxed">
-          En signant ci-dessous, vous confirmez votre presence physique a ce
-          cours. Votre adresse IP sera enregistree.
-        </p>
+        {info && (
+          <div className="space-y-3 mb-6 bg-[var(--color-surface)] rounded-xl p-4 border border-[var(--color-border-light)]">
+            <InfoRow label="Cours" value={info.course_name} />
+            <InfoRow label="Date" value={info.course_date} />
+            <InfoRow label="Professeur" value={info.professor_name} />
+          </div>
+        )}
 
         {/* Signature canvas */}
         <div className="mb-4">
@@ -287,23 +254,13 @@ export default function SignaturePage() {
   );
 }
 
-function InfoRow({
-  label,
-  value,
-  bold,
-}: {
-  label: string;
-  value: string;
-  bold?: boolean;
-}) {
+function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between items-baseline gap-2">
       <span className="text-sm text-[var(--color-text-muted)] shrink-0">
         {label}
       </span>
-      <span
-        className={`text-sm text-right ${bold ? "font-semibold text-[var(--color-text)]" : "text-[var(--color-text-secondary)]"}`}
-      >
+      <span className="text-sm text-right text-[var(--color-text-secondary)]">
         {value}
       </span>
     </div>

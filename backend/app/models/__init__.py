@@ -5,8 +5,10 @@ from app.models.course import Course
 from app.models.course_enrollment import CourseEnrollment
 from app.models.attendance_record import AttendanceRecord
 from app.models.monthly_report import MonthlyReport
+from app.models.notification import Notification
 
 __all__ = [
     "Professor", "Student", "StudentContact",
     "Course", "CourseEnrollment", "AttendanceRecord", "MonthlyReport",
+    "Notification",
 ]

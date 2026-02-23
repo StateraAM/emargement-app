@@ -8,7 +8,18 @@ export default function Home() {
 
   useEffect(() => {
     const token = api.getToken();
-    router.replace(token ? "/dashboard" : "/login");
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+    const userType = api.getUserType();
+    if (userType === "student") {
+      router.replace("/student");
+    } else if (userType === "admin") {
+      router.replace("/admin");
+    } else {
+      router.replace("/dashboard");
+    }
   }, [router]);
 
   return (

@@ -1,28 +1,69 @@
+import uuid as uuid_mod
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.database import get_db
+from app.core.config import settings
 from app.core.auth import verify_password, create_access_token, get_current_professor
 from app.models.professor import Professor
-from app.schemas.auth import LoginRequest, TokenResponse, ProfessorResponse
+from app.models.student import Student
+from app.schemas.auth import LoginRequest, TokenResponse, ProfessorResponse, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+security = HTTPBearer()
 
 
 @router.post("/login", response_model=TokenResponse)
 async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
+    # Try professor first
     result = await db.execute(select(Professor).where(Professor.email == request.email))
     professor = result.scalar_one_or_none()
-    if not professor or not verify_password(request.password, professor.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    token = create_access_token({"sub": str(professor.id), "role": professor.role})
-    return TokenResponse(access_token=token)
+    if professor and verify_password(request.password, professor.password_hash):
+        token = create_access_token({"sub": str(professor.id), "role": professor.role}, user_type="professor")
+        return TokenResponse(access_token=token)
+
+    # Try student
+    result = await db.execute(select(Student).where(Student.email == request.email))
+    student = result.scalar_one_or_none()
+    if student and student.password_hash and verify_password(request.password, student.password_hash):
+        token = create_access_token({"sub": str(student.id)}, user_type="student")
+        return TokenResponse(access_token=token)
+
+    raise HTTPException(status_code=401, detail="Invalid email or password")
 
 
-@router.get("/me", response_model=ProfessorResponse)
-async def get_me(professor: Professor = Depends(get_current_professor)):
-    return ProfessorResponse(
-        id=str(professor.id), email=professor.email,
-        first_name=professor.first_name, last_name=professor.last_name,
-        role=professor.role,
-    )
+@router.get("/me", response_model=UserResponse)
+async def get_me(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        payload = jwt.decode(credentials.credentials, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        user_type = payload.get("user_type", "professor")
+        user_id = payload.get("sub")
+        user_uuid = uuid_mod.UUID(user_id)
+    except (JWTError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    if user_type == "student":
+        result = await db.execute(select(Student).where(Student.id == user_uuid))
+        student = result.scalar_one_or_none()
+        if not student:
+            raise HTTPException(status_code=401, detail="Student not found")
+        return UserResponse(
+            id=str(student.id), email=student.email,
+            first_name=student.first_name, last_name=student.last_name,
+            user_type="student",
+        )
+    else:
+        result = await db.execute(select(Professor).where(Professor.id == user_uuid))
+        professor = result.scalar_one_or_none()
+        if not professor:
+            raise HTTPException(status_code=401, detail="Professor not found")
+        return UserResponse(
+            id=str(professor.id), email=professor.email,
+            first_name=professor.first_name, last_name=professor.last_name,
+            user_type="professor", role=professor.role,
+        )

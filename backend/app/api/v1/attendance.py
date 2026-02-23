@@ -1,4 +1,5 @@
 import uuid
+import json
 from uuid import UUID
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends
@@ -11,6 +12,7 @@ from app.models.professor import Professor
 from app.models.student import Student
 from app.models.course import Course
 from app.models.attendance_record import AttendanceRecord
+from app.models.notification import Notification
 from app.schemas.attendance import ValidateAttendanceRequest, AttendanceRecordResponse
 from app.services.email import email_service
 from app.services.qrcode import generate_qr_code
@@ -46,7 +48,7 @@ async def validate_attendance(
         db.add(record)
         records.append((record, student))
 
-        # Send signature email to present/late students
+        # Send signature email + in-app notification to present/late students
         if entry.status in ("present", "late") and student:
             signature_url = f"{settings.FRONTEND_URL}/sign/{token}"
             await email_service.send_signature_email(
@@ -56,6 +58,20 @@ async def validate_attendance(
                 course_date=course.start_time.strftime("%d/%m/%Y %H:%M") if course else "",
                 signature_url=signature_url,
             )
+
+            # Create in-app notification
+            notification_data = json.dumps({
+                "record_id": str(record.id),
+                "signature_token": str(token),
+            })
+            notification = Notification(
+                student_id=student.id,
+                type="signature_request",
+                title="Signature requise",
+                message=f"Veuillez signer votre presence pour le cours {course.name if course else 'Unknown'}",
+                data=notification_data,
+            )
+            db.add(notification)
 
     await db.commit()
 

@@ -1,6 +1,8 @@
 import uuid as uuid_mod
 from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.database import get_db
@@ -11,6 +13,10 @@ from app.models.professor import Professor
 from app.schemas.attendance import SignatureResponse
 
 router = APIRouter(prefix="/signatures", tags=["signatures"])
+
+
+class SignBody(BaseModel):
+    signature_data: Optional[str] = None
 
 
 def _parse_token(token: str) -> uuid_mod.UUID:
@@ -55,6 +61,7 @@ async def sign_attendance(
     token: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
+    body: SignBody = SignBody(),
 ):
     token_uuid = _parse_token(token)
     stmt = (
@@ -89,6 +96,8 @@ async def sign_attendance(
     record.signed_at = datetime.utcnow()
     record.signature_ip = request.client.host if request.client else None
     record.signature_user_agent = request.headers.get("user-agent")
+    if body.signature_data:
+        record.signature_data = body.signature_data
     await db.commit()
 
     return SignatureResponse(

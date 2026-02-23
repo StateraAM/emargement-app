@@ -16,8 +16,14 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      const prof = await login(email, password);
-      router.push(prof.role === "admin" ? "/admin" : "/dashboard");
+      const user = await login(email, password);
+      if (user.user_type === "student") {
+        router.push("/student");
+      } else if (user.role === "admin") {
+        router.push("/admin");
+      } else {
+        router.push("/dashboard");
+      }
     } catch {
       setError("Email ou mot de passe incorrect");
     } finally {

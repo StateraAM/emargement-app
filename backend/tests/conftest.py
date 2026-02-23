@@ -68,6 +68,7 @@ async def setup_database():
                 id=uuid.uuid4(), email=email,
                 first_name=first, last_name=last,
                 is_alternance=(i % 2 == 0),
+                password_hash=pwd_context.hash("student123"),
             )
             students.append(s)
         db.add_all(students)

@@ -41,7 +41,10 @@ async def seed():
             ("hugo.michel@etu.fr", "Hugo", "Michel", True),
         ]
         for email, first, last, alt in student_data:
-            s = Student(id=uuid.uuid4(), email=email, first_name=first, last_name=last, is_alternance=alt)
+            s = Student(
+                id=uuid.uuid4(), email=email, first_name=first, last_name=last,
+                is_alternance=alt, password_hash=pwd_context.hash("student123"),
+            )
             students.append(s)
             db.add(s)
 

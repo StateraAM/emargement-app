@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
-from sqlalchemy import String, ForeignKey, DateTime, UniqueConstraint
+from sqlalchemy import String, Text, ForeignKey, DateTime, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
@@ -24,6 +24,7 @@ class AttendanceRecord(Base):
     signed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     signature_ip: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     signature_user_agent: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    signature_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     qr_signed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
