@@ -82,6 +82,92 @@ async def get_professors(db: AsyncSession = Depends(get_db)):
     ]
 
 
+@router.get("/professors/{professor_id}/profile")
+async def get_professor_profile(
+    professor_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    professor = await db.get(Professor, UUID(professor_id))
+    if not professor:
+        raise HTTPException(status_code=404, detail="Professor not found")
+
+    # Courses taught with attendance stats
+    course_stmt = (
+        select(
+            Course.id,
+            Course.name,
+            Course.room,
+            Course.start_time,
+            func.count(AttendanceRecord.id).label("student_count"),
+            func.count().filter(AttendanceRecord.status == "present").label("present"),
+            func.count().filter(AttendanceRecord.status == "absent").label("absent"),
+            func.count().filter(AttendanceRecord.status == "late").label("late"),
+        )
+        .outerjoin(AttendanceRecord, AttendanceRecord.course_id == Course.id)
+        .where(Course.professor_id == professor.id)
+        .group_by(Course.id)
+        .order_by(Course.start_time.desc())
+    )
+    course_rows = (await db.execute(course_stmt)).all()
+
+    courses_list = []
+    total_students_set = set()
+    for row in course_rows:
+        total = row.student_count
+        rate = round(row.present / total * 100, 1) if total > 0 else 0
+        courses_list.append({
+            "course_name": row.name,
+            "date": row.start_time.strftime("%d/%m/%Y %H:%M"),
+            "room": row.room,
+            "student_count": total,
+            "attendance_rate": rate,
+        })
+        # Get unique students for this course
+        student_ids = (await db.execute(
+            select(CourseEnrollment.student_id).where(CourseEnrollment.course_id == row.id)
+        )).scalars().all()
+        total_students_set.update(student_ids)
+
+    # Aggregate by course name
+    from collections import defaultdict
+    name_stats = defaultdict(lambda: {"sessions": 0, "total": 0, "present": 0})
+    for row in course_rows:
+        ns = name_stats[row.name]
+        ns["sessions"] += 1
+        ns["total"] += row.student_count
+        ns["present"] += row.present
+    by_course_name = [
+        {
+            "course_name": name,
+            "total_sessions": s["sessions"],
+            "avg_rate": round(s["present"] / s["total"] * 100, 1) if s["total"] > 0 else 0,
+        }
+        for name, s in sorted(name_stats.items())
+    ]
+
+    # Overall stats
+    total_all = sum(r.student_count for r in course_rows)
+    present_all = sum(r.present for r in course_rows)
+    avg_rate = round(present_all / total_all * 100, 1) if total_all > 0 else 0
+
+    return {
+        "professor": {
+            "id": str(professor.id),
+            "email": professor.email,
+            "first_name": professor.first_name,
+            "last_name": professor.last_name,
+            "role": professor.role,
+        },
+        "stats": {
+            "total_courses_given": len(course_rows),
+            "total_students": len(total_students_set),
+            "avg_attendance_rate": avg_rate,
+        },
+        "courses": courses_list,
+        "by_course_name": by_course_name,
+    }
+
+
 @router.get("/students", response_model=list[StudentWithAttendanceResponse])
 async def get_students(db: AsyncSession = Depends(get_db)):
     students = (await db.execute(select(Student).order_by(Student.last_name))).scalars().all()
