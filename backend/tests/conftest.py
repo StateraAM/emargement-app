@@ -79,6 +79,7 @@ async def setup_database():
             id=uuid.uuid4(), student_id=students[0].id,
             type="parent", email="parent.martin@email.fr",
             first_name="Pierre", last_name="Martin",
+            password_hash=pwd_context.hash("parent123"),
         )
         db.add(contact1)
         await db.flush()
