@@ -58,6 +58,8 @@ export default function StudentJustificationDetailPage() {
   });
   const [comment, setComment] = useState("");
   const [sending, setSending] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (!loading && (!user || !isStudent)) router.push("/login");
@@ -89,6 +91,34 @@ export default function StudentJustificationDetailPage() {
       setSending(false);
     }
   };
+
+  const handleUploadFiles = async () => {
+    if (files.length === 0) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      files.forEach((f) => formData.append("files", f));
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_URL}/api/v1/student/justifications/${justificationId}/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Erreur");
+      }
+      setFiles([]);
+      await mutate(cacheKey);
+      showToast.success("Fichiers envoyes.");
+    } catch (e) {
+      showToast.error(e instanceof Error ? e.message : "Erreur lors de l'envoi.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const hasAdminComment = detail?.comments?.some((c) => c.author_type === "admin") ?? false;
 
   if (loading || !detail) {
     return <StudentSkeleton />;
@@ -184,6 +214,62 @@ export default function StudentJustificationDetailPage() {
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* File Upload — shown when admin asked for more info */}
+        {detail.status === "pending" && hasAdminComment && (
+          <div className="bg-[var(--color-surface-card)] rounded-2xl p-6 shadow-sm border border-[var(--color-border-light)] mb-6">
+            <h2 className="text-lg font-bold text-[var(--color-text)] mb-2" style={{ fontFamily: "var(--font-playfair)" }}>
+              Ajouter des fichiers
+            </h2>
+            <p className="text-sm text-[var(--color-text-muted)] mb-4">
+              L&apos;administration a demande des informations complementaires. Vous pouvez ajouter des fichiers (PDF, JPG, PNG).
+            </p>
+
+            <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition-colors cursor-pointer">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              <span className="text-sm font-semibold">Choisir des fichiers</span>
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.jpg,.jpeg,.png"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files) setFiles(Array.from(e.target.files));
+                }}
+              />
+            </label>
+
+            {files.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {files.map((f, i) => (
+                  <div key={i} className="flex items-center justify-between text-sm text-[var(--color-text)] bg-[var(--color-surface)] rounded-lg px-3 py-2 border border-[var(--color-border-light)]">
+                    <span className="truncate">{f.name}</span>
+                    <button
+                      onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors ml-2 shrink-0"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={handleUploadFiles}
+                  disabled={uploading}
+                  className="w-full text-sm font-semibold px-4 py-2.5 rounded-xl bg-[var(--color-primary)] text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                >
+                  {uploading ? "Envoi en cours..." : `Envoyer ${files.length} fichier${files.length > 1 ? "s" : ""}`}
+                </button>
+              </div>
+            )}
           </div>
         )}
 

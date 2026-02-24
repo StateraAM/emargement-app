@@ -81,14 +81,7 @@ function statusLabel(status: string): { text: string; className: string } {
   }
 }
 
-function justificationBadge(status: string, hasAdminComment?: boolean): { text: string; className: string } {
-  if (status === "pending" && hasAdminComment) {
-    return {
-      text: "Justifier",
-      className:
-        "bg-[var(--color-primary)] text-white",
-    };
-  }
+function justificationBadge(status: string): { text: string; className: string } {
   switch (status) {
     case "pending":
       return {
@@ -348,12 +341,21 @@ function StudentDashboard() {
                       <div className="ml-auto">
                         {justStatus ? (
                           record.justification_id ? (
-                            <button
-                              onClick={() => router.push(`/student/justification/${record.justification_id}`)}
-                              className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity ${justificationBadge(justStatus, record.has_admin_comment).className}`}
-                            >
-                              {justificationBadge(justStatus, record.has_admin_comment).text}
-                            </button>
+                            justStatus === "pending" && record.has_admin_comment ? (
+                              <button
+                                onClick={() => router.push(`/student/justification/${record.justification_id}`)}
+                                className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-dark)] active:scale-[0.97] transition-all"
+                              >
+                                Justifier
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => router.push(`/student/justification/${record.justification_id}`)}
+                                className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity ${justificationBadge(justStatus).className}`}
+                              >
+                                {justificationBadge(justStatus).text}
+                              </button>
+                            )
                           ) : (
                             <span
                               className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${justificationBadge(justStatus).className}`}
@@ -452,12 +454,21 @@ function StudentDashboard() {
                           <td className="px-3 py-3 text-center">
                             {justStatus ? (
                               record.justification_id ? (
-                                <button
-                                  onClick={() => router.push(`/student/justification/${record.justification_id}`)}
-                                  className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity ${justificationBadge(justStatus, record.has_admin_comment).className}`}
-                                >
-                                  {justificationBadge(justStatus, record.has_admin_comment).text}
-                                </button>
+                                justStatus === "pending" && record.has_admin_comment ? (
+                                  <button
+                                    onClick={() => router.push(`/student/justification/${record.justification_id}`)}
+                                    className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-dark)] active:scale-[0.97] transition-all"
+                                  >
+                                    Justifier
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => router.push(`/student/justification/${record.justification_id}`)}
+                                    className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity ${justificationBadge(justStatus).className}`}
+                                  >
+                                    {justificationBadge(justStatus).text}
+                                  </button>
+                                )
                               ) : (
                                 <span
                                   className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${justificationBadge(justStatus).className}`}

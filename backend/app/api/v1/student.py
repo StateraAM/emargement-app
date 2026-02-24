@@ -509,6 +509,52 @@ async def add_student_justification_comment(
     return {"ok": True, "comment_id": str(comment.id)}
 
 
+@router.post("/justifications/{justification_id}/upload")
+async def upload_justification_files(
+    justification_id: str,
+    files: list[UploadFile] = File(...),
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    justif = (await db.execute(
+        select(Justification).where(
+            Justification.id == UUID(justification_id),
+            Justification.student_id == student.id,
+        )
+    )).scalar_one_or_none()
+    if not justif:
+        raise HTTPException(status_code=404, detail="Justification not found")
+
+    upload_dir = UPLOADS_DIR / str(justif.id)
+    await asyncio.to_thread(upload_dir.mkdir, parents=True, exist_ok=True)
+
+    existing_files = json.loads(justif.file_paths) if justif.file_paths else []
+    new_files: list[str] = []
+
+    for f in files:
+        ext = Path(f.filename or "file").suffix.lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail=f"Extension {ext} non autorisee")
+        content = await f.read()
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail="Fichier trop volumineux (max 10MB)")
+        file_path = upload_dir / f.filename
+        await asyncio.to_thread(file_path.write_bytes, content)
+        new_files.append(f.filename)
+
+    all_files = existing_files + new_files
+    justif.file_paths = json.dumps(all_files)
+    await db.commit()
+
+    return {
+        "ok": True,
+        "file_urls": [
+            f"/api/v1/student/justification-files/{justif.id}/{fname}"
+            for fname in all_files
+        ],
+    }
+
+
 @router.get("/analytics")
 async def student_analytics(
     student: Student = Depends(get_current_student),
