@@ -241,6 +241,53 @@ async def seed():
             for s in students:
                 db.add(CourseEnrollment(course_id=c.id, student_id=s.id))
 
+        # ── Justifications (seed for testing review flow) ─────────────
+        # Collect absent records per student for justification seeding
+        absent_records_by_student: dict[uuid.UUID, list[AttendanceRecord]] = {}
+        for r in all_records:
+            if r.status == "absent":
+                absent_records_by_student.setdefault(r.student_id, []).append(r)
+
+        justification_data = [
+            # (student_idx, reason, status, reviewed_by_prof)
+            (1, "Rendez-vous medical - certificat joint", "pending", None),
+            (2, "Probleme de transport - greve SNCF", "pending", None),
+            (5, "Maladie - certificat medical", "approved", admin),
+            (6, "Urgence familiale", "approved", admin),
+            (7, "Rendez-vous dentaire", "approved", prof1),
+            (10, "Panne de reveil", "rejected", admin),
+            (11, "Raison personnelle", "rejected", prof2),
+            (12, "Rendez-vous administratif en mairie", "pending", None),
+        ]
+
+        all_justifications: list[Justification] = []
+        for student_idx, reason, jstatus, reviewer in justification_data:
+            student = students[student_idx]
+            absent_list = absent_records_by_student.get(student.id, [])
+            if not absent_list:
+                continue
+            # Pick a random absent record that doesn't already have a justification
+            used_record_ids = {j.attendance_record_id for j in all_justifications}
+            available = [r for r in absent_list if r.id not in used_record_ids]
+            if not available:
+                continue
+            target_record = random.choice(available)
+
+            j = Justification(
+                id=uuid.uuid4(),
+                attendance_record_id=target_record.id,
+                student_id=student.id,
+                reason=reason,
+                status=jstatus,
+                created_at=target_record.marked_by_prof_at + timedelta(hours=random.randint(2, 48)),
+            )
+            if jstatus in ("approved", "rejected") and reviewer:
+                j.reviewed_at = j.created_at + timedelta(hours=random.randint(1, 24))
+                j.reviewed_by = reviewer.id
+            all_justifications.append(j)
+
+        db.add_all(all_justifications)
+
         # ── Notifications for unsigned recent records ─────────────────
         # Find a recent "late" unsigned record for Alice (good student with a late)
         unsigned_late_records = [
@@ -276,6 +323,10 @@ async def seed():
         print(f"Total courses: {total_courses}")
         print(f"Enrollments: {len(all_enrollments) + len(courses_today) * len(students)}")
         print(f"Attendance records: {len(all_records)}")
+        pending_j = sum(1 for j in all_justifications if j.status == "pending")
+        approved_j = sum(1 for j in all_justifications if j.status == "approved")
+        rejected_j = sum(1 for j in all_justifications if j.status == "rejected")
+        print(f"Justifications: {len(all_justifications)} (pending={pending_j}, approved={approved_j}, rejected={rejected_j})")
         print("-" * 60)
 
         # Stats per profile

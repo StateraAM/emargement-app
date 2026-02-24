@@ -1,4 +1,6 @@
+import asyncio
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from sqlalchemy import select, func
 from app.core.database import async_session
 from app.models.student import Student
@@ -9,6 +11,8 @@ from app.models.attendance_record import AttendanceRecord
 from app.models.monthly_report import MonthlyReport
 from app.services.pdf import generate_attendance_pdf
 from app.services.email import email_service
+
+REPORTS_DIR = Path(__file__).resolve().parent.parent.parent / "uploads" / "reports"
 
 FRENCH_MONTHS = [
     "", "Janvier", "Fevrier", "Mars", "Avril", "Mai", "Juin",
@@ -87,6 +91,14 @@ async def generate_monthly_reports():
                 course_details=course_details,
             )
 
+            # Save PDF to disk
+            student_dir = REPORTS_DIR / str(student.id)
+            await asyncio.to_thread(student_dir.mkdir, parents=True, exist_ok=True)
+            month_filename = f"{last_month_end.year}-{last_month_end.month:02d}.pdf"
+            pdf_path = student_dir / month_filename
+            await asyncio.to_thread(pdf_path.write_bytes, pdf_bytes)
+            relative_pdf_url = f"uploads/reports/{student.id}/{month_filename}"
+
             # Send to all contacts
             contacts_stmt = select(StudentContact).where(StudentContact.student_id == student.id)
             contacts = (await db.execute(contacts_stmt)).scalars().all()
@@ -105,7 +117,7 @@ async def generate_monthly_reports():
                     month=last_month_start,
                     total_courses=total, attended=attended,
                     absent=absent, late=late, attendance_rate=rate,
-                    pdf_url="", sent_at=datetime.utcnow(),
+                    pdf_url=relative_pdf_url, sent_at=datetime.utcnow(),
                 )
                 db.add(report)
 

@@ -1,6 +1,8 @@
+import asyncio
 import csv
 import io
 import json
+import re
 from datetime import date, datetime, time
 from pathlib import Path
 from typing import Optional
@@ -17,6 +19,7 @@ from app.models.course import Course
 from app.models.course_enrollment import CourseEnrollment
 from app.models.attendance_record import AttendanceRecord
 from app.models.justification import Justification
+from app.models.monthly_report import MonthlyReport
 from app.models.notification import Notification
 from app.models.audit_log import AuditLog
 from app.schemas.student import StudentWithAttendanceResponse
@@ -26,6 +29,13 @@ from app.services.audit import create_audit_log
 from app.core.sanitize import sanitize_text
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
+
+
+def _parse_iso_datetime(value: str) -> datetime:
+    """Parse an ISO 8601 datetime string, handling +HH:MM timezone offsets
+    that Python 3.9's datetime.fromisoformat() does not support."""
+    cleaned = re.sub(r"[+-]\d{2}:\d{2}$", "", value)
+    return datetime.fromisoformat(cleaned)
 
 
 @router.get("/stats")
@@ -208,9 +218,36 @@ async def serve_justification_file_admin(
         raise HTTPException(status_code=404, detail="Justification not found")
     safe_filename = Path(filename).name
     file_path = UPLOADS_DIR / justification_id / safe_filename
-    if not file_path.exists():
+    if not await asyncio.to_thread(file_path.exists):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_path)
+
+
+# ---------- Report PDF ----------
+
+REPORTS_DIR = Path(__file__).resolve().parent.parent.parent.parent / "uploads" / "reports"
+
+
+@router.get("/reports/{report_id}/pdf")
+async def serve_report_pdf(
+    report_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(MonthlyReport).where(MonthlyReport.id == UUID(report_id))
+    result = await db.execute(stmt)
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if not report.pdf_url:
+        raise HTTPException(status_code=404, detail="PDF not available for this report")
+
+    # pdf_url is a relative path like "uploads/reports/{student_id}/{month}.pdf"
+    base_dir = Path(__file__).resolve().parent.parent.parent.parent
+    file_path = base_dir / report.pdf_url
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="PDF file not found on disk")
+
+    return FileResponse(file_path, media_type="application/pdf")
 
 
 # ---------- Audit logs ----------
@@ -229,9 +266,9 @@ async def list_audit_logs(
     if event_type:
         stmt = stmt.where(AuditLog.event_type == event_type)
     if start_date:
-        stmt = stmt.where(AuditLog.created_at >= datetime.fromisoformat(start_date))
+        stmt = stmt.where(AuditLog.created_at >= _parse_iso_datetime(start_date))
     if end_date:
-        stmt = stmt.where(AuditLog.created_at <= datetime.fromisoformat(end_date))
+        stmt = stmt.where(AuditLog.created_at <= _parse_iso_datetime(end_date))
     stmt = stmt.offset(offset).limit(limit)
     result = await db.execute(stmt)
     logs = result.scalars().all()
@@ -268,9 +305,9 @@ async def export_audit_logs_csv(
 ):
     stmt = select(AuditLog).order_by(AuditLog.created_at.desc())
     if start_date:
-        stmt = stmt.where(AuditLog.created_at >= datetime.fromisoformat(start_date))
+        stmt = stmt.where(AuditLog.created_at >= _parse_iso_datetime(start_date))
     if end_date:
-        stmt = stmt.where(AuditLog.created_at <= datetime.fromisoformat(end_date))
+        stmt = stmt.where(AuditLog.created_at <= _parse_iso_datetime(end_date))
     result = await db.execute(stmt)
     logs = result.scalars().all()
 

@@ -1,13 +1,14 @@
+import asyncio
 import json
 import os
 import uuid as uuid_mod
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, update
+from sqlalchemy import select, func, update, delete
 from sqlalchemy.orm import aliased
 from app.core.database import get_db
 from app.core.auth import get_current_student
@@ -104,6 +105,45 @@ async def mark_all_read(
         .values(is_read=True)
     )
     await db.execute(stmt)
+    await db.commit()
+    return {"ok": True}
+
+
+@router.delete("/notifications/old")
+async def delete_old_notifications(
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete notifications older than 30 days for the current student."""
+    cutoff = datetime.utcnow() - timedelta(days=30)
+    stmt = (
+        delete(Notification)
+        .where(
+            Notification.student_id == student.id,
+            Notification.created_at < cutoff,
+        )
+    )
+    result = await db.execute(stmt)
+    await db.commit()
+    return {"ok": True, "deleted": result.rowcount}
+
+
+@router.delete("/notifications/{notification_id}")
+async def delete_notification(
+    notification_id: str,
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a single notification belonging to the current student."""
+    stmt = select(Notification).where(
+        Notification.id == UUID(notification_id),
+        Notification.student_id == student.id,
+    )
+    result = await db.execute(stmt)
+    notification = result.scalar_one_or_none()
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    await db.delete(notification)
     await db.commit()
     return {"ok": True}
 
@@ -273,14 +313,14 @@ async def justify_absence(
 
     if files:
         upload_dir = UPLOADS_DIR / str(justification_id)
-        upload_dir.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(upload_dir.mkdir, parents=True, exist_ok=True)
 
         for f in files:
             content = await f.read()
             if len(content) > MAX_FILE_SIZE:
                 raise HTTPException(status_code=400, detail=f"File {f.filename} exceeds 10MB limit")
             file_path = upload_dir / f.filename
-            file_path.write_bytes(content)
+            await asyncio.to_thread(file_path.write_bytes, content)
             saved_paths.append(f.filename)
 
     justification = Justification(

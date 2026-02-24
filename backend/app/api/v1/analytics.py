@@ -1,12 +1,13 @@
 from collections import defaultdict
 from typing import List
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from app.core.database import get_db
 from app.core.auth import require_admin
+from app.core.rate_limit import limiter
 from app.models.professor import Professor
 from app.models.attendance_record import AttendanceRecord
 from app.models.course import Course
@@ -26,7 +27,9 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
 @router.get("/attendance-trends", response_model=List[AttendanceTrendEntry])
+@limiter.limit("30/minute")
 async def get_attendance_trends(
+    request: Request,
     period: str = Query("daily", pattern="^(daily|weekly|monthly)$"),
     _admin: Professor = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
@@ -70,7 +73,9 @@ async def get_attendance_trends(
 
 
 @router.get("/courses", response_model=List[CourseAnalyticsEntry])
+@limiter.limit("30/minute")
 async def get_courses_analytics(
+    request: Request,
     _admin: Professor = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -132,7 +137,9 @@ async def get_courses_analytics(
 
 
 @router.get("/students-at-risk", response_model=List[StudentAtRiskEntry])
+@limiter.limit("30/minute")
 async def get_students_at_risk(
+    request: Request,
     threshold: float = Query(70, ge=0, le=100),
     _admin: Professor = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
@@ -202,7 +209,9 @@ async def get_students_at_risk(
 
 
 @router.get("/professors", response_model=List[ProfessorAnalyticsEntry])
+@limiter.limit("30/minute")
 async def get_professor_stats(
+    request: Request,
     _admin: Professor = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -268,7 +277,9 @@ async def get_professor_stats(
 
 
 @router.get("/summary", response_model=AnalyticsSummary)
+@limiter.limit("30/minute")
 async def get_summary(
+    request: Request,
     _admin: Professor = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):

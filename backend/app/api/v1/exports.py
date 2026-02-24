@@ -1,5 +1,6 @@
 import csv
 import io
+import re
 import zipfile
 from datetime import datetime
 from typing import Optional
@@ -19,6 +20,14 @@ from app.services.pdf import generate_certificate_pdf
 router = APIRouter(prefix="/admin/exports", tags=["exports"], dependencies=[Depends(require_admin)])
 
 SCHOOL_NAME = "Ecole de Commerce"
+
+
+def _parse_iso_datetime(value: str) -> datetime:
+    """Parse an ISO 8601 datetime string, handling +HH:MM timezone offsets
+    that Python 3.9's datetime.fromisoformat() does not support."""
+    # Strip timezone offset like +02:00 or -05:30 for compatibility with Python 3.9
+    cleaned = re.sub(r"[+-]\d{2}:\d{2}$", "", value)
+    return datetime.fromisoformat(cleaned)
 
 
 class CertificateRequest(BaseModel):
@@ -74,8 +83,8 @@ async def generate_certificate(
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    start_dt = datetime.fromisoformat(body.start_date)
-    end_dt = datetime.fromisoformat(body.end_date + "T23:59:59")
+    start_dt = _parse_iso_datetime(body.start_date)
+    end_dt = _parse_iso_datetime(body.end_date + "T23:59:59")
 
     planned, realized, rate = await _compute_student_hours(db, student.id, start_dt, end_dt)
 
@@ -103,8 +112,8 @@ async def generate_certificates_bulk(
     db: AsyncSession = Depends(get_db),
 ):
     students = (await db.execute(select(Student).order_by(Student.last_name))).scalars().all()
-    start_dt = datetime.fromisoformat(start_date)
-    end_dt = datetime.fromisoformat(end_date + "T23:59:59")
+    start_dt = _parse_iso_datetime(start_date)
+    end_dt = _parse_iso_datetime(end_date + "T23:59:59")
 
     zip_buf = io.BytesIO()
     with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -139,8 +148,8 @@ async def export_opco(
     db: AsyncSession = Depends(get_db),
 ):
     students = (await db.execute(select(Student).order_by(Student.last_name))).scalars().all()
-    start_dt = datetime.fromisoformat(start_date)
-    end_dt = datetime.fromisoformat(end_date + "T23:59:59")
+    start_dt = _parse_iso_datetime(start_date)
+    end_dt = _parse_iso_datetime(end_date + "T23:59:59")
 
     output = io.StringIO()
     writer = csv.writer(output, delimiter=";")
