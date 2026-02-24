@@ -114,6 +114,152 @@ async def get_students(db: AsyncSession = Depends(get_db)):
     return result
 
 
+@router.get("/students/{student_id}/profile")
+async def get_student_profile(
+    student_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    student = await db.get(Student, UUID(student_id))
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    # Overall stats
+    total = (await db.execute(
+        select(func.count(AttendanceRecord.id)).where(AttendanceRecord.student_id == student.id)
+    )).scalar() or 0
+    attended = (await db.execute(
+        select(func.count(AttendanceRecord.id))
+        .where(AttendanceRecord.student_id == student.id, AttendanceRecord.status == "present")
+    )).scalar() or 0
+    absent = (await db.execute(
+        select(func.count(AttendanceRecord.id))
+        .where(AttendanceRecord.student_id == student.id, AttendanceRecord.status == "absent")
+    )).scalar() or 0
+    late = (await db.execute(
+        select(func.count(AttendanceRecord.id))
+        .where(AttendanceRecord.student_id == student.id, AttendanceRecord.status == "late")
+    )).scalar() or 0
+    rate = round((attended / total * 100), 1) if total > 0 else 0
+
+    # Stats by course name
+    course_stmt = (
+        select(
+            Course.name,
+            func.count(AttendanceRecord.id).label("total"),
+            func.count().filter(AttendanceRecord.status == "present").label("attended"),
+            func.count().filter(AttendanceRecord.status == "absent").label("absent"),
+            func.count().filter(AttendanceRecord.status == "late").label("late"),
+        )
+        .join(Course, Course.id == AttendanceRecord.course_id)
+        .where(AttendanceRecord.student_id == student.id)
+        .group_by(Course.name)
+        .order_by(Course.name)
+    )
+    course_rows = (await db.execute(course_stmt)).all()
+    by_course = [
+        {
+            "course_name": row.name,
+            "total": row.total,
+            "attended": row.attended,
+            "absent": row.absent,
+            "late": row.late,
+            "rate": round(row.attended / row.total * 100, 1) if row.total > 0 else 0,
+        }
+        for row in course_rows
+    ]
+
+    # Stats by professor
+    prof_stmt = (
+        select(
+            Professor.first_name,
+            Professor.last_name,
+            func.count(AttendanceRecord.id).label("total"),
+            func.count().filter(AttendanceRecord.status == "present").label("attended"),
+            func.count().filter(AttendanceRecord.status == "absent").label("absent"),
+            func.count().filter(AttendanceRecord.status == "late").label("late"),
+        )
+        .join(Course, Course.id == AttendanceRecord.course_id)
+        .join(Professor, Professor.id == Course.professor_id)
+        .where(AttendanceRecord.student_id == student.id)
+        .group_by(Professor.id)
+        .order_by(Professor.last_name)
+    )
+    prof_rows = (await db.execute(prof_stmt)).all()
+    by_professor = [
+        {
+            "professor_name": f"{row.first_name} {row.last_name}",
+            "total": row.total,
+            "attended": row.attended,
+            "absent": row.absent,
+            "late": row.late,
+            "rate": round(row.attended / row.total * 100, 1) if row.total > 0 else 0,
+        }
+        for row in prof_rows
+    ]
+
+    # Recent absences
+    absence_stmt = (
+        select(AttendanceRecord, Course, Justification)
+        .join(Course, Course.id == AttendanceRecord.course_id)
+        .outerjoin(Justification, Justification.attendance_record_id == AttendanceRecord.id)
+        .where(AttendanceRecord.student_id == student.id)
+        .where(AttendanceRecord.status.in_(["absent", "late"]))
+        .order_by(Course.start_time.desc())
+        .limit(20)
+    )
+    absence_rows = (await db.execute(absence_stmt)).all()
+    recent_absences = [
+        {
+            "course_name": course.name,
+            "date": course.start_time.strftime("%d/%m/%Y %H:%M"),
+            "status": record.status,
+            "justification_status": justif.status if justif else None,
+        }
+        for record, course, justif in absence_rows
+    ]
+
+    # Justifications
+    justif_stmt = (
+        select(Justification, Course)
+        .join(AttendanceRecord, AttendanceRecord.id == Justification.attendance_record_id)
+        .join(Course, Course.id == AttendanceRecord.course_id)
+        .where(Justification.student_id == student.id)
+        .order_by(Justification.created_at.desc())
+    )
+    justif_rows = (await db.execute(justif_stmt)).all()
+    justifications_list = [
+        {
+            "id": str(j.id),
+            "course_name": course.name,
+            "date": course.start_time.strftime("%d/%m/%Y %H:%M"),
+            "reason": j.reason,
+            "status": j.status,
+        }
+        for j, course in justif_rows
+    ]
+
+    return {
+        "student": {
+            "id": str(student.id),
+            "email": student.email,
+            "first_name": student.first_name,
+            "last_name": student.last_name,
+            "is_alternance": student.is_alternance,
+        },
+        "stats": {
+            "total_courses": total,
+            "attended": attended,
+            "absent": absent,
+            "late": late,
+            "attendance_rate": rate,
+        },
+        "by_course": by_course,
+        "by_professor": by_professor,
+        "recent_absences": recent_absences,
+        "justifications": justifications_list,
+    }
+
+
 # ---------- Justification management ----------
 
 UPLOADS_DIR = Path(__file__).resolve().parent.parent.parent.parent / "uploads" / "justifications"
