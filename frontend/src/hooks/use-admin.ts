@@ -182,6 +182,32 @@ export function useProfessorProfile(professorId: string) {
   });
 }
 
+export interface JustificationDetail {
+  id: string;
+  student_id: string;
+  student_name: string;
+  student_email: string;
+  course_name: string;
+  course_date: string;
+  reason: string;
+  file_urls: string[];
+  status: string;
+  created_at: string;
+  reviewed_by_name: string | null;
+  reviewed_at: string | null;
+  comments: { id: string; author_type: string; author_name: string; message: string; created_at: string }[];
+}
+
+export function useJustificationDetail(justificationId: string) {
+  return useSWR<JustificationDetail>(justificationId ? `admin-justification-${justificationId}` : null, {
+    fetcher: () => api.get<JustificationDetail>(`/api/v1/admin/justifications/${justificationId}`),
+  });
+}
+
+export async function addJustificationComment(justificationId: string, message: string) {
+  return api.post<{ ok: boolean }>(`/api/v1/admin/justifications/${justificationId}/comment`, { message });
+}
+
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

@@ -145,7 +145,7 @@ export default function AdminPage() {
                 </thead>
                 <tbody className="divide-y divide-[var(--color-border-light)]">
                   {justifications?.map((j) => (
-                    <tr key={j.id} className="hover:bg-[var(--color-surface)] transition-colors">
+                    <tr key={j.id} onClick={() => router.push(`/admin/justifications/${j.id}`)} className="hover:bg-[var(--color-surface)] transition-colors cursor-pointer">
                       <td className="px-4 py-3">
                         <div className="font-semibold text-[var(--color-text)] text-sm">{j.student_name}</div>
                         <div className="text-xs text-[var(--color-text-muted)]">{j.student_email}</div>
