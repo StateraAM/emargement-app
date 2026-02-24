@@ -154,7 +154,7 @@ export default function AdminPage() {
                         {j.course_name}
                       </td>
                       <td className="px-4 py-3 text-sm text-[var(--color-text-muted)] hidden sm:table-cell">
-                        {new Date(j.course_date).toLocaleDateString("fr-FR")}
+                        {j.course_date}
                       </td>
                       <td className="px-4 py-3 text-sm text-[var(--color-text)]">
                         <div className="flex items-center gap-1.5">
