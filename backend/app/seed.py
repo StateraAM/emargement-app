@@ -251,6 +251,7 @@ async def seed():
 
         justification_data = [
             # (student_idx, reason, status, reviewed_by_prof)
+            (0, "Rendez-vous medical - certificat joint", "pending", None),
             (1, "Rendez-vous medical - certificat joint", "pending", None),
             (2, "Probleme de transport - greve SNCF", "pending", None),
             (5, "Maladie - certificat medical", "approved", admin),
