@@ -1,6 +1,6 @@
 "use client";
 import { useAuth } from "@/hooks/use-auth";
-import { useAdminStats, useAdminStudents, useAdminProfessors, useAdminJustifications, reviewJustification, useAuditLogs } from "@/hooks/use-admin";
+import { useAdminStats, useAdminStudents, useAdminProfessors, useAdminJustifications, reviewJustification, useAuditLogs, generateCertificate, generateCertificatesBulk, downloadBlob } from "@/hooks/use-admin";
 import { API_URL } from "@/lib/api";
 import { mutate } from "swr";
 import { useRouter } from "next/navigation";
@@ -21,6 +21,10 @@ export default function AdminPage() {
   const [auditFilter, setAuditFilter] = useState("");
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const { data: auditLogs } = useAuditLogs(auditFilter || undefined);
+  const [exportStartDate, setExportStartDate] = useState("");
+  const [exportEndDate, setExportEndDate] = useState("");
+  const [exportStudentId, setExportStudentId] = useState("all");
+  const [exportLoading, setExportLoading] = useState(false);
 
   useEffect(() => {
     if (!loading && (!professor || !isAdmin)) router.push("/login");
@@ -614,6 +618,105 @@ export default function AdminPage() {
                 Aucun log trouve
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Exports Section */}
+        <div className="bg-[var(--color-surface-card)] rounded-2xl shadow-sm border border-[var(--color-border-light)] overflow-hidden mt-8 mb-8">
+          <div className="px-5 py-4 border-b border-[var(--color-border-light)]">
+            <h2
+              className="text-lg font-bold text-[var(--color-text)]"
+              style={{ fontFamily: "var(--font-playfair)" }}
+            >
+              Exports
+            </h2>
+          </div>
+
+          <div className="p-5 space-y-4">
+            <div className="flex flex-wrap gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-[var(--color-text-muted)] mb-1 uppercase tracking-wider">Date debut</label>
+                <input
+                  type="date"
+                  value={exportStartDate}
+                  onChange={(e) => setExportStartDate(e.target.value)}
+                  className="px-3 py-2 text-sm bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[var(--color-text-muted)] mb-1 uppercase tracking-wider">Date fin</label>
+                <input
+                  type="date"
+                  value={exportEndDate}
+                  onChange={(e) => setExportEndDate(e.target.value)}
+                  className="px-3 py-2 text-sm bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[var(--color-text-muted)] mb-1 uppercase tracking-wider">Etudiant</label>
+                <select
+                  value={exportStudentId}
+                  onChange={(e) => setExportStudentId(e.target.value)}
+                  className="px-3 py-2 text-sm bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] focus:outline-none min-w-[200px]"
+                >
+                  <option value="all">Tous les etudiants</option>
+                  {students?.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.last_name} {s.first_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                disabled={!exportStartDate || !exportEndDate || exportLoading}
+                onClick={async () => {
+                  setExportLoading(true);
+                  try {
+                    if (exportStudentId === "all") {
+                      const blob = await generateCertificatesBulk(exportStartDate, exportEndDate);
+                      downloadBlob(blob, "certificats.zip");
+                    } else {
+                      const blob = await generateCertificate(exportStudentId, exportStartDate, exportEndDate);
+                      const student = students?.find((s) => s.id === exportStudentId);
+                      const name = student ? `${student.last_name}_${student.first_name}` : "certificat";
+                      downloadBlob(blob, `certificat_${name}.pdf`);
+                    }
+                  } catch { /* ignore */ } finally {
+                    setExportLoading(false);
+                  }
+                }}
+                className="text-sm font-semibold px-4 py-2 rounded-xl bg-[var(--color-primary)] text-white hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                  <polyline points="10 9 9 9 8 9" />
+                </svg>
+                {exportLoading ? "Generation..." : exportStudentId === "all" ? "Generer Certificats (ZIP)" : "Generer Certificat (PDF)"}
+              </button>
+              <a
+                href={exportStartDate && exportEndDate ? `${API_URL}/api/v1/admin/exports/opco?start_date=${exportStartDate}&end_date=${exportEndDate}` : "#"}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`text-sm font-semibold px-4 py-2 rounded-xl flex items-center gap-2 transition-opacity ${
+                  exportStartDate && exportEndDate
+                    ? "bg-[var(--color-accent)] text-white hover:opacity-90"
+                    : "bg-[var(--color-accent)]/30 text-white/50 pointer-events-none"
+                }`}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Export OPCO (CSV)
+              </a>
+            </div>
           </div>
         </div>
       </main>

@@ -103,3 +103,42 @@ export function useAuditLogs(eventType?: string, limit = 50) {
     fetcher: () => api.get<AuditLogEntry[]>(`/api/v1/admin/audit-logs?${params}`),
   });
 }
+
+export async function generateCertificate(studentId: string, startDate: string, endDate: string): Promise<Blob> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const resp = await fetch(`${API_URL}/api/v1/admin/exports/certificate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ student_id: studentId, start_date: startDate, end_date: endDate }),
+  });
+  if (!resp.ok) throw new Error("Failed to generate certificate");
+  return resp.blob();
+}
+
+export async function generateCertificatesBulk(startDate: string, endDate: string): Promise<Blob> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const resp = await fetch(`${API_URL}/api/v1/admin/exports/certificates-bulk?start_date=${startDate}&end_date=${endDate}`, {
+    method: "POST",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!resp.ok) throw new Error("Failed to generate certificates");
+  return resp.blob();
+}
+
+export function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
