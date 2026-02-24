@@ -159,6 +159,29 @@ export function useStudentProfile(studentId: string) {
   });
 }
 
+export interface ProfessorProfile {
+  professor: {
+    id: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    role: string;
+  };
+  stats: {
+    total_courses_given: number;
+    total_students: number;
+    avg_attendance_rate: number;
+  };
+  courses: { course_name: string; date: string; room: string; student_count: number; attendance_rate: number }[];
+  by_course_name: { course_name: string; total_sessions: number; avg_rate: number }[];
+}
+
+export function useProfessorProfile(professorId: string) {
+  return useSWR<ProfessorProfile>(professorId ? `admin-professor-profile-${professorId}` : null, {
+    fetcher: () => api.get<ProfessorProfile>(`/api/v1/admin/professors/${professorId}/profile`),
+  });
+}
+
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

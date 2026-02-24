@@ -466,12 +466,14 @@ export default function AdminPage() {
                     className="hover:bg-[var(--color-surface)] transition-colors"
                   >
                     <td className="px-5 py-3.5">
-                      <span className="font-semibold text-[var(--color-text)]">
-                        {p.last_name}
-                      </span>{" "}
-                      <span className="text-[var(--color-text-secondary)]">
-                        {p.first_name}
-                      </span>
+                      <Link href={`/admin/professors/${p.id}`} className="hover:underline">
+                        <span className="font-semibold text-[var(--color-text)]">
+                          {p.last_name}
+                        </span>{" "}
+                        <span className="text-[var(--color-text-secondary)]">
+                          {p.first_name}
+                        </span>
+                      </Link>
                     </td>
                     <td className="px-5 py-3.5 text-[var(--color-text-muted)] hidden md:table-cell">
                       {p.email}
