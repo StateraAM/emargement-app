@@ -34,3 +34,28 @@ export function useCourseStudents(courseId: string | null) {
     }
   );
 }
+
+export interface CourseHistoryItem {
+  id: string;
+  name: string;
+  room: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  student_count: number;
+  present_count: number;
+  absent_count: number;
+  late_count: number;
+  is_validated: boolean;
+}
+
+export interface CourseHistory {
+  courses: CourseHistoryItem[];
+  total: number;
+}
+
+export function useCourseHistory(limit = 50) {
+  return useSWR<CourseHistory>("course-history", {
+    fetcher: () => api.get<CourseHistory>(`/api/v1/courses/history?limit=${limit}`),
+  });
+}

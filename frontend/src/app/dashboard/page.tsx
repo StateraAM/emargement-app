@@ -6,6 +6,7 @@ import { DashboardSkeleton } from "@/components/skeleton";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import Link from "next/link";
 
 export default function DashboardPage() {
   const { professor, loading: authLoading, logout } = useAuth();
@@ -78,16 +79,28 @@ export default function DashboardPage() {
 
       {/* Content */}
       <main className="max-w-lg mx-auto px-4 py-6 animate-fade-in">
-        <div className="mb-6">
-          <p className="text-sm text-[var(--color-text-muted)] capitalize">
-            {today}
-          </p>
-          <h2
-            className="text-2xl font-bold text-[var(--color-text)] mt-1"
-            style={{ fontFamily: "var(--font-playfair)" }}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <p className="text-sm text-[var(--color-text-muted)] capitalize">
+              {today}
+            </p>
+            <h2
+              className="text-2xl font-bold text-[var(--color-text)] mt-1"
+              style={{ fontFamily: "var(--font-playfair)" }}
+            >
+              Cours du jour
+            </h2>
+          </div>
+          <Link
+            href="/dashboard/history"
+            className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-xl bg-[var(--color-surface-card)] border border-[var(--color-border-light)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-elevated)] transition-colors"
           >
-            Cours du jour
-          </h2>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            Historique
+          </Link>
         </div>
 
         {courses && courses.length === 0 && (
