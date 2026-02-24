@@ -18,6 +18,7 @@ interface AttendanceRecord {
   signed_at: string | null;
   justification_status: string | null;
   justification_id: string | null;
+  has_admin_comment: boolean;
 }
 
 function useAttendanceHistory() {
@@ -80,7 +81,14 @@ function statusLabel(status: string): { text: string; className: string } {
   }
 }
 
-function justificationBadge(status: string): { text: string; className: string } {
+function justificationBadge(status: string, hasAdminComment?: boolean): { text: string; className: string } {
+  if (status === "pending" && hasAdminComment) {
+    return {
+      text: "Justifier",
+      className:
+        "bg-[var(--color-primary)] text-white",
+    };
+  }
   switch (status) {
     case "pending":
       return {
@@ -339,11 +347,20 @@ function StudentDashboard() {
                       </div>
                       <div className="ml-auto">
                         {justStatus ? (
-                          <span
-                            className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${justificationBadge(justStatus).className}`}
-                          >
-                            {justificationBadge(justStatus).text}
-                          </span>
+                          record.justification_id ? (
+                            <button
+                              onClick={() => router.push(`/student/justification/${record.justification_id}`)}
+                              className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity ${justificationBadge(justStatus, record.has_admin_comment).className}`}
+                            >
+                              {justificationBadge(justStatus, record.has_admin_comment).text}
+                            </button>
+                          ) : (
+                            <span
+                              className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${justificationBadge(justStatus).className}`}
+                            >
+                              {justificationBadge(justStatus).text}
+                            </span>
+                          )
                         ) : canJustify(record) ? (
                           <button
                             onClick={() => router.push(`/student/justify/${record.id}`)}
@@ -434,11 +451,20 @@ function StudentDashboard() {
                           </td>
                           <td className="px-3 py-3 text-center">
                             {justStatus ? (
-                              <span
-                                className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${justificationBadge(justStatus).className}`}
-                              >
-                                {justificationBadge(justStatus).text}
-                              </span>
+                              record.justification_id ? (
+                                <button
+                                  onClick={() => router.push(`/student/justification/${record.justification_id}`)}
+                                  className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity ${justificationBadge(justStatus, record.has_admin_comment).className}`}
+                                >
+                                  {justificationBadge(justStatus, record.has_admin_comment).text}
+                                </button>
+                              ) : (
+                                <span
+                                  className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${justificationBadge(justStatus).className}`}
+                                >
+                                  {justificationBadge(justStatus).text}
+                                </span>
+                              )
                             ) : canJustify(record) ? (
                               <button
                                 onClick={() =>

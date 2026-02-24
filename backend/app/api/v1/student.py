@@ -163,6 +163,21 @@ async def attendance_history(
     )
     result = await db.execute(stmt)
     rows = result.all()
+
+    # Check which justifications have admin comments (need re-reply)
+    justification_ids = [j.id for _, _, j in rows if j]
+    admin_comment_ids: set = set()
+    if justification_ids:
+        comment_stmt = (
+            select(JustificationComment.justification_id)
+            .where(
+                JustificationComment.justification_id.in_(justification_ids),
+                JustificationComment.author_type == "admin",
+            )
+            .distinct()
+        )
+        admin_comment_ids = set((await db.execute(comment_stmt)).scalars().all())
+
     return [
         {
             "id": str(record.id),
@@ -174,6 +189,7 @@ async def attendance_history(
             "qr_signed_at": record.qr_signed_at.isoformat() if record.qr_signed_at else None,
             "justification_status": justification.status if justification else None,
             "justification_id": str(justification.id) if justification else None,
+            "has_admin_comment": justification.id in admin_comment_ids if justification else False,
         }
         for record, course, justification in rows
     ]
@@ -402,6 +418,62 @@ async def serve_justification_file(
         raise HTTPException(status_code=404, detail="File not found")
 
     return FileResponse(file_path)
+
+
+@router.get("/justifications/{justification_id}")
+async def get_student_justification_detail(
+    justification_id: str,
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = (
+        select(Justification, Course)
+        .join(AttendanceRecord, AttendanceRecord.id == Justification.attendance_record_id)
+        .join(Course, Course.id == AttendanceRecord.course_id)
+        .where(
+            Justification.id == UUID(justification_id),
+            Justification.student_id == student.id,
+        )
+    )
+    result = await db.execute(stmt)
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Justification not found")
+
+    justif, course = row
+    file_names = json.loads(justif.file_paths) if justif.file_paths else []
+    file_urls = [
+        f"/api/v1/student/justification-files/{justif.id}/{fname}"
+        for fname in file_names
+    ]
+
+    # Get comments
+    comment_stmt = (
+        select(JustificationComment)
+        .where(JustificationComment.justification_id == justif.id)
+        .order_by(JustificationComment.created_at.asc())
+    )
+    comments = (await db.execute(comment_stmt)).scalars().all()
+
+    return {
+        "id": str(justif.id),
+        "course_name": course.name,
+        "course_date": course.start_time.strftime("%d/%m/%Y %H:%M"),
+        "reason": justif.reason,
+        "file_urls": file_urls,
+        "status": justif.status,
+        "created_at": justif.created_at.isoformat(),
+        "comments": [
+            {
+                "id": str(c.id),
+                "author_type": c.author_type,
+                "author_name": c.author_name,
+                "message": c.message,
+                "created_at": c.created_at.isoformat(),
+            }
+            for c in comments
+        ],
+    }
 
 
 @router.post("/justifications/{justification_id}/comment")
