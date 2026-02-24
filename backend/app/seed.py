@@ -4,6 +4,7 @@ import json
 import random
 import uuid
 from datetime import datetime, date, timedelta
+from pathlib import Path
 from passlib.context import CryptContext
 from app.core.database import async_session, engine, Base
 from app.models import *
@@ -273,11 +274,33 @@ async def seed():
                 continue
             target_record = random.choice(available)
 
+            justif_id = uuid.uuid4()
+
+            # Create sample uploaded files for justifications mentioning "certificat"
+            file_paths_json = None
+            if "certificat" in reason.lower():
+                justif_upload_dir = Path(__file__).resolve().parent.parent / "uploads" / "justifications" / str(justif_id)
+                justif_upload_dir.mkdir(parents=True, exist_ok=True)
+                # Create a sample PDF-like file
+                sample_pdf = justif_upload_dir / "certificat_medical.pdf"
+                sample_pdf.write_bytes(b"%PDF-1.4 Sample certificat medical pour test")
+                # Create a sample image
+                sample_img = justif_upload_dir / "justificatif.png"
+                # Minimal valid PNG (1x1 white pixel)
+                sample_img.write_bytes(
+                    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+                    b"\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00"
+                    b"\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00"
+                    b"\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82"
+                )
+                file_paths_json = json.dumps(["certificat_medical.pdf", "justificatif.png"])
+
             j = Justification(
-                id=uuid.uuid4(),
+                id=justif_id,
                 attendance_record_id=target_record.id,
                 student_id=student.id,
                 reason=reason,
+                file_paths=file_paths_json,
                 status=jstatus,
                 created_at=target_record.marked_by_prof_at + timedelta(hours=random.randint(2, 48)),
             )
