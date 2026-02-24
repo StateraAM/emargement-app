@@ -94,26 +94,44 @@ export function CourseCard({ course }: { course: Course }) {
           className={`
             inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-xl transition-all duration-200
             ${
-              isPast
-                ? "bg-[var(--color-border-light)] text-[var(--color-text-muted)] cursor-default pointer-events-none"
-                : "bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-dark)] active:scale-[0.97]"
+              course.is_validated
+                ? "bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-elevated)] active:scale-[0.97]"
+                : isPast
+                  ? "bg-[var(--color-border-light)] text-[var(--color-text-muted)] cursor-default pointer-events-none"
+                  : "bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-dark)] active:scale-[0.97]"
             }
           `}
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
-            <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-          </svg>
-          Faire l&apos;appel
+          {course.is_validated ? (
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+          ) : (
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+            </svg>
+          )}
+          {course.is_validated ? "Editer l\u0027appel" : "Faire l\u0027appel"}
         </Link>
       </div>
     </div>

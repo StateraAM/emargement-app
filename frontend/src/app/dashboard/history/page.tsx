@@ -24,7 +24,7 @@ export default function CourseHistoryPage() {
     <div className="min-h-screen bg-[var(--color-surface)]">
       {/* Header */}
       <header className="bg-[var(--color-primary)] text-white">
-        <div className="max-w-lg mx-auto px-4 py-4">
+        <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
               <button
@@ -83,7 +83,7 @@ export default function CourseHistoryPage() {
       </header>
 
       {/* Content */}
-      <main className="max-w-lg mx-auto px-4 py-6 animate-fade-in">
+      <main className="max-w-4xl mx-auto px-4 py-6 animate-fade-in">
         {!history || history.courses.length === 0 ? (
           <div className="text-center py-16 animate-fade-in">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[var(--color-border-light)] mb-4">

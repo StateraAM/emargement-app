@@ -10,6 +10,7 @@ export interface Course {
   end_time: string;
   professor_name: string;
   student_count: number;
+  is_validated: boolean;
 }
 
 export interface Student {
