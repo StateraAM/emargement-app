@@ -226,6 +226,9 @@ async def seed():
             ("Marketing L3", "B204", 9, 11, prof1),
             ("Finance M1", "A102", current_hour, current_hour + 2, prof1),
             ("Strategie M2", "C301", current_hour + 3, current_hour + 5, prof2),
+            ("Droit des affaires L3", "A201", current_hour, current_hour + 2, prof2),
+            ("Economie L3", "B105", current_hour + 1, current_hour + 3, prof1),
+            ("Communication M1", "C102", current_hour + 2, current_hour + 4, prof2),
         ]
         courses_today: list[Course] = []
         for name, room, start_h, end_h, prof in courses_today_data:
