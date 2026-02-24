@@ -77,3 +77,56 @@ def generate_attendance_pdf(
 
     doc.build(elements)
     return buf.getvalue()
+
+
+def generate_certificate_pdf(
+    school_name: str,
+    student_name: str,
+    student_email: str,
+    period_start: str,
+    period_end: str,
+    total_hours_planned: float,
+    total_hours_realized: float,
+    attendance_rate: float,
+) -> bytes:
+    from datetime import datetime
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=25*mm, bottomMargin=25*mm)
+    styles = getSampleStyleSheet()
+    elements = []
+
+    title_style = ParagraphStyle("CertTitle", parent=styles["Title"], fontSize=18, alignment=1)
+    elements.append(Paragraph("CERTIFICAT DE REALISATION", title_style))
+    elements.append(Spacer(1, 15*mm))
+
+    body_style = ParagraphStyle("CertBody", parent=styles["Normal"], fontSize=11, leading=16)
+    elements.append(Paragraph(f"<b>Organisme de formation :</b> {school_name}", body_style))
+    elements.append(Spacer(1, 5*mm))
+    elements.append(Paragraph(f"<b>Apprenant :</b> {student_name} ({student_email})", body_style))
+    elements.append(Spacer(1, 5*mm))
+    elements.append(Paragraph(f"<b>Periode :</b> du {period_start} au {period_end}", body_style))
+    elements.append(Spacer(1, 5*mm))
+
+    hours_data = [
+        ["Heures prevues", "Heures realisees", "Taux de presence"],
+        [f"{total_hours_planned:.1f}h", f"{total_hours_realized:.1f}h", f"{attendance_rate:.1f}%"],
+    ]
+    hours_table = Table(hours_data, colWidths=[60*mm, 60*mm, 60*mm])
+    hours_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2563eb")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("BACKGROUND", (0, 1), (-1, 1), colors.HexColor("#f3f4f6")),
+    ]))
+    elements.append(hours_table)
+    elements.append(Spacer(1, 15*mm))
+
+    elements.append(Paragraph(f"Fait le {datetime.now().strftime('%d/%m/%Y')}", body_style))
+    elements.append(Spacer(1, 10*mm))
+    elements.append(Paragraph(f"Pour {school_name},", body_style))
+    elements.append(Paragraph("Signature de l'organisme", body_style))
+
+    doc.build(elements)
+    return buf.getvalue()
