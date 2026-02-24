@@ -27,6 +27,18 @@ function useAttendanceHistory() {
   });
 }
 
+interface StudentAnalytics {
+  stats: { total_courses: number; attended: number; absent: number; late: number; rate: number };
+  by_course: { course_name: string; total: number; attended: number; absent: number; late: number; rate: number }[];
+  by_professor: { professor_name: string; total: number; attended: number; absent: number; late: number; rate: number }[];
+}
+
+function useStudentAnalytics() {
+  return useSWR<StudentAnalytics>("student-analytics", {
+    fetcher: () => api.get<StudentAnalytics>("/api/v1/student/analytics"),
+  });
+}
+
 function formatDate(dateStr: string): string {
   // dateStr is "dd/MM/yyyy HH:mm" format from backend
   const [datePart] = dateStr.split(" ");
@@ -110,8 +122,10 @@ function StudentDashboard() {
   const { notifications } = useNotifications();
   const { justifications } = useJustifications();
   const { data: history, isLoading: historyLoading } = useAttendanceHistory();
+  const { data: analytics } = useStudentAnalytics();
   const router = useRouter();
   const [filters, setFilters] = useState<Set<string>>(new Set(["absent", "late"]));
+  const [statsOpen, setStatsOpen] = useState(false);
 
   const toggleFilter = (key: string) => {
     setFilters((prev) => {
@@ -450,6 +464,240 @@ function StudentDashboard() {
             </>
           )}
         </section>
+
+        {/* Analytics Section */}
+        {analytics && (
+          <section className="mt-8">
+            <button
+              onClick={() => setStatsOpen(!statsOpen)}
+              className="flex items-center gap-2 w-full text-left mb-4"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--color-text-muted)"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={`transition-transform ${statsOpen ? "rotate-90" : ""}`}
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+              <h2
+                className="text-2xl font-bold text-[var(--color-text)]"
+                style={{ fontFamily: "var(--font-playfair)" }}
+              >
+                Mes statistiques
+              </h2>
+            </button>
+
+            {statsOpen && (
+              <div className="animate-fade-in">
+                {/* Stats cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
+                  {[
+                    { label: "Total cours", value: analytics.stats.total_courses },
+                    { label: "Present", value: analytics.stats.attended, color: "success" },
+                    { label: "Absent", value: analytics.stats.absent, color: "danger" },
+                    { label: "En retard", value: analytics.stats.late, color: "warning" },
+                  ].map(({ label, value, color }) => (
+                    <div
+                      key={label}
+                      className="bg-[var(--color-surface-card)] rounded-2xl border border-[var(--color-border-light)] p-4 text-center"
+                    >
+                      <p className={`text-2xl font-bold ${color ? `text-[var(--color-${color})]` : "text-[var(--color-text)]"}`}>
+                        {value}
+                      </p>
+                      <p className="text-xs text-[var(--color-text-muted)] mt-1">{label}</p>
+                    </div>
+                  ))}
+                  <div className="bg-[var(--color-surface-card)] rounded-2xl border border-[var(--color-border-light)] p-4 text-center">
+                    <p className="text-2xl font-bold">
+                      <span
+                        className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${
+                          analytics.stats.rate >= 80
+                            ? "bg-[var(--color-success-bg)] text-[var(--color-success)] border border-[var(--color-success-border)]"
+                            : analytics.stats.rate >= 60
+                              ? "bg-[var(--color-warning-bg)] text-[var(--color-warning)] border border-[var(--color-warning-border)]"
+                              : "bg-[var(--color-danger-bg)] text-[var(--color-danger)] border border-[var(--color-danger-border)]"
+                        }`}
+                      >
+                        {analytics.stats.rate}%
+                      </span>
+                    </p>
+                    <p className="text-xs text-[var(--color-text-muted)] mt-1">Taux</p>
+                  </div>
+                </div>
+
+                {/* By course table */}
+                {analytics.by_course.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-sm font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-3">
+                      Par matiere
+                    </h3>
+
+                    {/* Mobile cards */}
+                    <div className="space-y-3 sm:hidden">
+                      {analytics.by_course.map((c) => (
+                        <div
+                          key={c.course_name}
+                          className="bg-[var(--color-surface-card)] rounded-2xl border border-[var(--color-border-light)] p-4"
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <p className="font-medium text-[var(--color-text)] text-sm">{c.course_name}</p>
+                            <span
+                              className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${
+                                c.rate >= 80
+                                  ? "bg-[var(--color-success-bg)] text-[var(--color-success)] border border-[var(--color-success-border)]"
+                                  : c.rate >= 60
+                                    ? "bg-[var(--color-warning-bg)] text-[var(--color-warning)] border border-[var(--color-warning-border)]"
+                                    : "bg-[var(--color-danger-bg)] text-[var(--color-danger)] border border-[var(--color-danger-border)]"
+                              }`}
+                            >
+                              {c.rate}%
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-[var(--color-text-muted)]">
+                            <span>{c.total} cours</span>
+                            <span className="text-[var(--color-success)]">{c.attended} P</span>
+                            <span className="text-[var(--color-danger)]">{c.absent} A</span>
+                            <span className="text-[var(--color-warning)]">{c.late} R</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Desktop table */}
+                    <div className="hidden sm:block bg-[var(--color-surface-card)] rounded-2xl border border-[var(--color-border-light)] overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-[var(--color-border-light)] bg-[var(--color-surface)]">
+                              <th className="text-left px-3 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">Matiere</th>
+                              <th className="text-center px-3 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">Total</th>
+                              <th className="text-center px-3 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">Present</th>
+                              <th className="text-center px-3 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">Absent</th>
+                              <th className="text-center px-3 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">Retard</th>
+                              <th className="text-center px-3 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">Taux</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {analytics.by_course.map((c) => (
+                              <tr key={c.course_name} className="border-b border-[var(--color-border-light)] last:border-b-0">
+                                <td className="px-3 py-3 text-[var(--color-text)] font-medium">{c.course_name}</td>
+                                <td className="px-3 py-3 text-center text-[var(--color-text-secondary)]">{c.total}</td>
+                                <td className="px-3 py-3 text-center text-[var(--color-success)]">{c.attended}</td>
+                                <td className="px-3 py-3 text-center text-[var(--color-danger)]">{c.absent}</td>
+                                <td className="px-3 py-3 text-center text-[var(--color-warning)]">{c.late}</td>
+                                <td className="px-3 py-3 text-center">
+                                  <span
+                                    className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${
+                                      c.rate >= 80
+                                        ? "bg-[var(--color-success-bg)] text-[var(--color-success)] border border-[var(--color-success-border)]"
+                                        : c.rate >= 60
+                                          ? "bg-[var(--color-warning-bg)] text-[var(--color-warning)] border border-[var(--color-warning-border)]"
+                                          : "bg-[var(--color-danger-bg)] text-[var(--color-danger)] border border-[var(--color-danger-border)]"
+                                    }`}
+                                  >
+                                    {c.rate}%
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* By professor table */}
+                {analytics.by_professor.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-3">
+                      Par professeur
+                    </h3>
+
+                    {/* Mobile cards */}
+                    <div className="space-y-3 sm:hidden">
+                      {analytics.by_professor.map((p) => (
+                        <div
+                          key={p.professor_name}
+                          className="bg-[var(--color-surface-card)] rounded-2xl border border-[var(--color-border-light)] p-4"
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <p className="font-medium text-[var(--color-text)] text-sm">{p.professor_name}</p>
+                            <span
+                              className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${
+                                p.rate >= 80
+                                  ? "bg-[var(--color-success-bg)] text-[var(--color-success)] border border-[var(--color-success-border)]"
+                                  : p.rate >= 60
+                                    ? "bg-[var(--color-warning-bg)] text-[var(--color-warning)] border border-[var(--color-warning-border)]"
+                                    : "bg-[var(--color-danger-bg)] text-[var(--color-danger)] border border-[var(--color-danger-border)]"
+                              }`}
+                            >
+                              {p.rate}%
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-[var(--color-text-muted)]">
+                            <span>{p.total} cours</span>
+                            <span className="text-[var(--color-success)]">{p.attended} P</span>
+                            <span className="text-[var(--color-danger)]">{p.absent} A</span>
+                            <span className="text-[var(--color-warning)]">{p.late} R</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Desktop table */}
+                    <div className="hidden sm:block bg-[var(--color-surface-card)] rounded-2xl border border-[var(--color-border-light)] overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-[var(--color-border-light)] bg-[var(--color-surface)]">
+                              <th className="text-left px-3 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">Professeur</th>
+                              <th className="text-center px-3 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">Total</th>
+                              <th className="text-center px-3 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">Present</th>
+                              <th className="text-center px-3 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">Absent</th>
+                              <th className="text-center px-3 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">Retard</th>
+                              <th className="text-center px-3 py-3 font-semibold text-[var(--color-text-muted)] text-xs uppercase tracking-wider">Taux</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {analytics.by_professor.map((p) => (
+                              <tr key={p.professor_name} className="border-b border-[var(--color-border-light)] last:border-b-0">
+                                <td className="px-3 py-3 text-[var(--color-text)] font-medium">{p.professor_name}</td>
+                                <td className="px-3 py-3 text-center text-[var(--color-text-secondary)]">{p.total}</td>
+                                <td className="px-3 py-3 text-center text-[var(--color-success)]">{p.attended}</td>
+                                <td className="px-3 py-3 text-center text-[var(--color-danger)]">{p.absent}</td>
+                                <td className="px-3 py-3 text-center text-[var(--color-warning)]">{p.late}</td>
+                                <td className="px-3 py-3 text-center">
+                                  <span
+                                    className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${
+                                      p.rate >= 80
+                                        ? "bg-[var(--color-success-bg)] text-[var(--color-success)] border border-[var(--color-success-border)]"
+                                        : p.rate >= 60
+                                          ? "bg-[var(--color-warning-bg)] text-[var(--color-warning)] border border-[var(--color-warning-border)]"
+                                          : "bg-[var(--color-danger-bg)] text-[var(--color-danger)] border border-[var(--color-danger-border)]"
+                                    }`}
+                                  >
+                                    {p.rate}%
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
       </main>
     </div>
   );
