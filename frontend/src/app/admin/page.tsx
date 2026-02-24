@@ -1,6 +1,6 @@
 "use client";
 import { useAuth } from "@/hooks/use-auth";
-import { useAdminStats, useAdminStudents, useAdminProfessors, useAdminJustifications, reviewJustification } from "@/hooks/use-admin";
+import { useAdminStats, useAdminStudents, useAdminProfessors, useAdminJustifications, reviewJustification, useAuditLogs } from "@/hooks/use-admin";
 import { API_URL } from "@/lib/api";
 import { mutate } from "swr";
 import { useRouter } from "next/navigation";
@@ -18,6 +18,9 @@ export default function AdminPage() {
   const [rejectComment, setRejectComment] = useState("");
   const [reviewLoading, setReviewLoading] = useState(false);
   const { data: justifications } = useAdminJustifications(justifFilter || undefined);
+  const [auditFilter, setAuditFilter] = useState("");
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const { data: auditLogs } = useAuditLogs(auditFilter || undefined);
 
   useEffect(() => {
     if (!loading && (!professor || !isAdmin)) router.push("/login");
@@ -491,6 +494,127 @@ export default function AdminPage() {
               Aucun professeur trouve
             </div>
           )}
+        </div>
+
+        {/* Audit Logs Section */}
+        <div className="mt-8 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2
+              className="text-2xl font-bold text-[var(--color-text)]"
+              style={{ fontFamily: "var(--font-playfair)" }}
+            >
+              Logs d&apos;audit
+            </h2>
+            <a
+              href={`${API_URL}/api/v1/admin/audit-logs/export-csv`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white hover:opacity-90 transition-opacity"
+            >
+              Exporter CSV
+            </a>
+          </div>
+
+          <div className="flex gap-2 mb-4">
+            {[
+              { label: "Tous", value: "" },
+              { label: "Signatures", value: "signature" },
+              { label: "Validations", value: "attendance_validation" },
+              { label: "Modifications", value: "attendance_edit" },
+              { label: "Justificatifs", value: "justification_review" },
+            ].map((f) => (
+              <button
+                key={f.value}
+                onClick={() => setAuditFilter(f.value)}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                  auditFilter === f.value
+                    ? "bg-[var(--color-primary)] text-white"
+                    : "bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-surface)]"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="bg-[var(--color-surface-card)] rounded-2xl shadow-sm border border-[var(--color-border-light)] overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-[var(--color-surface)] text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
+                    <th className="text-left px-4 py-3 font-semibold">Date</th>
+                    <th className="text-left px-4 py-3 font-semibold">Type</th>
+                    <th className="text-left px-4 py-3 font-semibold">Acteur</th>
+                    <th className="text-left px-4 py-3 font-semibold hidden md:table-cell">Cible</th>
+                    <th className="text-left px-4 py-3 font-semibold hidden sm:table-cell">IP</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border-light)]">
+                  {auditLogs?.map((log) => (
+                    <>
+                      <tr
+                        key={log.id}
+                        onClick={() => setExpandedLogId(expandedLogId === log.id ? null : log.id)}
+                        className="hover:bg-[var(--color-surface)] transition-colors cursor-pointer"
+                      >
+                        <td className="px-4 py-3 text-sm text-[var(--color-text-muted)]">
+                          {new Date(log.created_at).toLocaleString("fr-FR")}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${
+                            log.event_type === "signature"
+                              ? "bg-[var(--color-success-bg)] text-[var(--color-success)]"
+                              : log.event_type === "attendance_validation"
+                                ? "bg-[var(--color-primary)]/10 text-[var(--color-primary)]"
+                                : log.event_type === "attendance_edit"
+                                  ? "bg-[var(--color-warning-bg)] text-[var(--color-warning)]"
+                                  : "bg-[var(--color-accent)]/15 text-[var(--color-accent)]"
+                          }`}>
+                            {log.event_type === "signature" ? "Signature"
+                              : log.event_type === "attendance_validation" ? "Validation"
+                              : log.event_type === "attendance_edit" ? "Modification"
+                              : log.event_type === "justification_submit" ? "Justificatif soumis"
+                              : log.event_type === "justification_review" ? "Review justificatif"
+                              : log.event_type}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-[var(--color-text)]">
+                          <span className="font-semibold">{log.actor_name}</span>
+                          <span className="text-[var(--color-text-muted)] ml-1 text-xs">({log.actor_type})</span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-[var(--color-text-muted)] hidden md:table-cell">
+                          {log.target_type} {log.target_id}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-[var(--color-text-muted)] hidden sm:table-cell">
+                          {log.ip_address || "\u2014"}
+                        </td>
+                      </tr>
+                      {expandedLogId === log.id && (
+                        <tr key={`${log.id}-detail`}>
+                          <td colSpan={5} className="px-4 py-3 bg-[var(--color-surface)]">
+                            <div className="text-xs text-[var(--color-text-muted)] space-y-1">
+                              <p><span className="font-semibold">User-Agent:</span> {log.user_agent || "\u2014"}</p>
+                              {log.metadata && (
+                                <pre className="mt-1 p-2 rounded-lg bg-[var(--color-surface-card)] border border-[var(--color-border-light)] overflow-x-auto text-xs text-[var(--color-text-secondary)]">
+                                  {JSON.stringify(log.metadata, null, 2)}
+                                </pre>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {auditLogs?.length === 0 && (
+              <div className="text-center py-12 text-[var(--color-text-muted)] text-sm">
+                Aucun log trouve
+              </div>
+            )}
+          </div>
         </div>
       </main>
     </div>

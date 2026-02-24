@@ -81,3 +81,25 @@ export async function reviewJustification(id: string, decision: string, comment?
     comment,
   });
 }
+
+export interface AuditLogEntry {
+  id: string;
+  event_type: string;
+  actor_type: string;
+  actor_name: string;
+  target_type: string;
+  target_id: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export function useAuditLogs(eventType?: string, limit = 50) {
+  const params = new URLSearchParams();
+  if (eventType) params.set("event_type", eventType);
+  params.set("limit", String(limit));
+  return useSWR<AuditLogEntry[]>(`admin-audit-logs-${eventType || "all"}`, {
+    fetcher: () => api.get<AuditLogEntry[]>(`/api/v1/admin/audit-logs?${params}`),
+  });
+}
