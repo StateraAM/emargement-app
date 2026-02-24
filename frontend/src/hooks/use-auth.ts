@@ -54,6 +54,7 @@ export function useAuth() {
   const isStudent = user?.user_type === "student";
   const isProfessor = user?.user_type === "professor";
   const isAdmin = user?.role === "admin";
+  const isExternal = user?.user_type === "external";
 
   return {
     user,
@@ -64,5 +65,6 @@ export function useAuth() {
     isStudent,
     isProfessor,
     isAdmin,
+    isExternal,
   };
 }

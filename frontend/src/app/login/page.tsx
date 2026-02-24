@@ -18,7 +18,9 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const user = await login(email, password);
-      if (user.user_type === "student") {
+      if (user.user_type === "external") {
+        router.push("/external");
+      } else if (user.user_type === "student") {
         router.push("/student");
       } else if (user.role === "admin") {
         router.push("/admin");
