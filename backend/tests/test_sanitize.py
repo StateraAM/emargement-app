@@ -6,28 +6,27 @@ def test_sanitize_basic_text():
     assert sanitize_text("Hello world") == "Hello world"
 
 
-def test_sanitize_html_entities():
-    """HTML tags and entities should be escaped."""
-    assert sanitize_text("<script>alert('xss')</script>") == "&lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;"
+def test_sanitize_html_tags_stripped():
+    """HTML tags should be stripped, text content preserved."""
+    assert sanitize_text("<script>alert('xss')</script>") == "alert('xss')"
 
 
 def test_sanitize_html_attributes():
-    """HTML with attributes should be fully escaped."""
+    """HTML with attributes should be fully stripped."""
     result = sanitize_text('<img src="x" onerror="alert(1)">')
     assert "<img" not in result
-    assert "&lt;img" in result
-    assert "onerror" in result  # content preserved but escaped
+    assert "onerror" not in result
 
 
-def test_sanitize_ampersand():
-    """Ampersands should be escaped."""
-    assert sanitize_text("A & B") == "A &amp; B"
+def test_sanitize_ampersand_preserved():
+    """Ampersands should be preserved (React handles display escaping)."""
+    assert sanitize_text("A & B") == "A & B"
 
 
-def test_sanitize_quotes():
-    """Quotes should be escaped."""
-    result = sanitize_text('He said "hello"')
-    assert "&quot;" in result or '"' not in result.replace("&quot;", "")
+def test_sanitize_quotes_preserved():
+    """Quotes and apostrophes should be preserved."""
+    assert sanitize_text("He said \"hello\"") == 'He said "hello"'
+    assert sanitize_text("c'est bon") == "c'est bon"
 
 
 def test_sanitize_strip_whitespace():
@@ -85,11 +84,10 @@ def test_sanitize_whitespace_only():
 
 
 def test_sanitize_combined_html_and_whitespace():
-    """HTML + extra whitespace should be both escaped and collapsed."""
+    """HTML + extra whitespace should have tags stripped and whitespace collapsed."""
     result = sanitize_text("  <b>  bold  </b>  ")
-    assert "&lt;b&gt;" in result
-    assert "&lt;/b&gt;" in result
-    # Should not have leading/trailing spaces and internal should be collapsed
+    assert "<b>" not in result
+    assert "bold" in result
     assert not result.startswith(" ")
     assert not result.endswith(" ")
     assert "  " not in result
@@ -109,23 +107,19 @@ def test_sanitize_french_accents():
 
 
 def test_sanitize_sql_injection_attempt():
-    """SQL injection strings should be escaped (HTML escaping covers quotes)."""
+    """SQL injection strings pass through (parameterized queries handle safety)."""
     result = sanitize_text("'; DROP TABLE students; --")
-    assert "&#x27;" in result  # single quote escaped
-    assert "DROP TABLE" in result  # content preserved but safe for HTML
+    assert "'" in result  # apostrophe preserved
+    assert "DROP TABLE" in result  # content preserved
 
 
 def test_sanitize_order_of_operations():
-    """Strip happens before escape, collapse after escape."""
-    # Leading/trailing space stripped, then HTML escaped, then whitespace collapsed
+    """Strip happens before tag removal, collapse after."""
     result = sanitize_text("  <b>  test  </b>  ")
-    assert result == "&lt;b&gt; test &lt;/b&gt;"
+    assert result == "test"
 
 
-def test_sanitize_max_length_after_escape():
-    """Max length applies after HTML escaping (escaped text may be longer)."""
-    # '<' becomes '&lt;' (4 chars), so 10 '<' = 40 escaped chars
-    result = sanitize_text("<" * 10, max_length=20)
-    assert len(result) == 20
-    # Should be a truncated version of '&lt;&lt;&lt;...'
-    assert result.startswith("&lt;")
+def test_sanitize_max_length_after_strip():
+    """Max length applies after tag stripping."""
+    result = sanitize_text("<b>" * 10 + "hello", max_length=5)
+    assert result == "hello"
