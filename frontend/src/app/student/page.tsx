@@ -164,7 +164,7 @@ function StudentDashboard() {
 
   const canJustify = (record: AttendanceRecord): boolean => {
     return (
-      (record.status === "absent" || record.status === "late") &&
+      record.status === "absent" &&
       !getJustificationStatus(record)
     );
   };
