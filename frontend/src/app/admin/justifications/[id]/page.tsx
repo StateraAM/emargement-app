@@ -2,31 +2,12 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useJustificationDetail, addJustificationComment, reviewJustification } from "@/hooks/use-admin";
 import { AdminSkeleton } from "@/components/skeleton";
-import { API_URL } from "@/lib/api";
 import { showToast } from "@/lib/toast";
 import { mutate } from "swr";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useState, useCallback } from "react";
-
-function isImageFile(url: string): boolean {
-  return /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(url);
-}
-
-function AuthImage({ url, alt }: { url: string; alt: string }) {
-  const [src, setSrc] = useState<string | null>(null);
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    fetch(`${API_URL}${url}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.blob())
-      .then((blob) => setSrc(URL.createObjectURL(blob)))
-      .catch(() => {});
-    return () => { if (src) URL.revokeObjectURL(src); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url]);
-  if (!src) return <div className="h-32 rounded-xl bg-[var(--color-surface)] animate-pulse" />;
-  return <img src={src} alt={alt} className="max-w-full max-h-96 h-auto" />;
-}
+import { useEffect, useState } from "react";
+import { FilePreview } from "@/components/file-preview";
 
 export default function JustificationDetailPage() {
   const { professor, loading, isAdmin } = useAuth();
@@ -38,17 +19,6 @@ export default function JustificationDetailPage() {
   const [sending, setSending] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
 
-  const handleDownload = useCallback(async (fileUrl: string, filename: string) => {
-    const token = localStorage.getItem("token");
-    const res = await fetch(`${API_URL}${fileUrl}`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) { showToast.error("Erreur lors du telechargement."); return; }
-    const blob = await res.blob();
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }, []);
 
   useEffect(() => {
     if (!loading && (!professor || !isAdmin)) router.push("/login");
@@ -160,42 +130,10 @@ export default function JustificationDetailPage() {
         {detail.file_urls.length === 0 ? (
           <p className="text-sm text-[var(--color-text-muted)] py-2">Aucune piece jointe.</p>
         ) : (
-          <div className="space-y-4">
-            {detail.file_urls.map((url, i) => {
-              const filename = url.split("/").pop() || `fichier-${i + 1}`;
-              return (
-                <div key={i} className="flex flex-col gap-2">
-                  {isImageFile(url) ? (
-                    <div>
-                      <p className="text-xs text-[var(--color-text-muted)] mb-1.5 font-medium">{filename}</p>
-                      <button onClick={() => handleDownload(url, filename)} className="cursor-pointer">
-                        <div className="rounded-xl overflow-hidden border border-[var(--color-border-light)] inline-block hover:opacity-90 transition-opacity">
-                          <AuthImage url={url} alt={`Piece jointe ${i + 1}`} />
-                        </div>
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => handleDownload(url, filename)}
-                      className="inline-flex items-center gap-2.5 text-sm font-semibold px-4 py-3 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface)] text-[var(--color-text)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition-colors cursor-pointer"
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                        <polyline points="14 2 14 8 20 8" />
-                        <line x1="16" y1="13" x2="8" y2="13" />
-                        <line x1="16" y1="17" x2="8" y2="17" />
-                      </svg>
-                      {filename}
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-auto opacity-50">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <polyline points="7 10 12 15 17 10" />
-                        <line x1="12" y1="15" x2="12" y2="3" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+          <div className="space-y-6">
+            {detail.file_urls.map((url, i) => (
+              <FilePreview key={i} url={url} index={i} />
+            ))}
           </div>
         )}
       </div>
