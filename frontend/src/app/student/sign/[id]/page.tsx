@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { StudentHeader } from "@/components/student-header";
 import SignaturePad from "signature_pad";
 import { mutate } from "swr";
+import { showToast } from "@/lib/toast";
 
 interface RecordInfo {
   id: string;
@@ -84,7 +85,7 @@ export default function StudentSignPage() {
       mutate("student-unread-count");
       setSigned(true);
     } catch {
-      setError("Erreur lors de la signature. Veuillez reessayer.");
+      showToast.error("Erreur lors de la signature. Veuillez reessayer.");
     } finally {
       setSigning(false);
     }

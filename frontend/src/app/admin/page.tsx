@@ -1,13 +1,15 @@
 "use client";
 import { useAuth } from "@/hooks/use-auth";
 import { useAdminStats, useAdminStudents, useAdminProfessors, useAdminJustifications, reviewJustification, useAuditLogs, generateCertificate, generateCertificatesBulk, downloadBlob } from "@/hooks/use-admin";
+import { AdminSkeleton } from "@/components/skeleton";
 import { API_URL } from "@/lib/api";
+import { showToast } from "@/lib/toast";
 import { mutate } from "swr";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export default function AdminPage() {
-  const { professor, loading, logout, isAdmin } = useAuth();
+  const { professor, loading, isAdmin } = useAuth();
   const { data: stats } = useAdminStats();
   const { data: students } = useAdminStudents();
   const { data: professors } = useAdminProfessors();
@@ -25,18 +27,15 @@ export default function AdminPage() {
   const [exportEndDate, setExportEndDate] = useState("");
   const [exportStudentId, setExportStudentId] = useState("all");
   const [exportLoading, setExportLoading] = useState(false);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const toggleSection = (key: string) => setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
 
   useEffect(() => {
     if (!loading && (!professor || !isAdmin)) router.push("/login");
   }, [loading, professor, isAdmin, router]);
 
   if (loading || !stats) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--color-surface)]">
-        <div className="w-8 h-8 border-3 border-[var(--color-primary)]/20 border-t-[var(--color-primary)] rounded-full animate-spin mb-4" />
-        <p className="text-[var(--color-text-muted)] text-sm">Chargement...</p>
-      </div>
-    );
+    return <AdminSkeleton />;
   }
 
   const filteredStudents = students?.filter(
@@ -47,60 +46,7 @@ export default function AdminPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[var(--color-surface)]">
-      {/* Header */}
-      <header className="bg-[var(--color-primary-dark)] text-white">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[var(--color-accent)] flex items-center justify-center">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="white"
-                strokeWidth="2.5"
-              >
-                <path d="M12 20V10" />
-                <path d="M18 20V4" />
-                <path d="M6 20v-4" />
-              </svg>
-            </div>
-            <div>
-              <h1
-                className="text-lg font-bold tracking-tight"
-                style={{ fontFamily: "var(--font-playfair)" }}
-              >
-                Administration
-              </h1>
-              <p className="text-xs text-white/60">Tableau de bord</p>
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              logout();
-              router.push("/login");
-            }}
-            className="flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition-colors bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-            Deconnexion
-          </button>
-        </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-4 py-6 animate-fade-in">
+      <main className="max-w-6xl mx-auto px-4 py-6 animate-fade-in">
         {/* Stats Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8 stagger-children">
           <StatCard
@@ -133,7 +79,10 @@ export default function AdminPage() {
 
         {/* Justifications Section */}
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-4">
+          <button
+            onClick={() => toggleSection("justif")}
+            className="flex items-center gap-3 mb-4 w-full text-left md:cursor-default"
+          >
             <h2
               className="text-2xl font-bold text-[var(--color-text)]"
               style={{ fontFamily: "var(--font-playfair)" }}
@@ -145,8 +94,20 @@ export default function AdminPage() {
                 {justifications.filter((j) => j.status === "pending").length} en attente
               </span>
             )}
-          </div>
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className={`ml-auto text-[var(--color-text-muted)] md:hidden transition-transform ${collapsed.justif ? "" : "rotate-180"}`}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
 
+          <div className={`${collapsed.justif ? "hidden md:block" : ""}`}>
           <div className="flex gap-2 mb-4">
             {[
               { label: "Tous", value: "" },
@@ -246,7 +207,8 @@ export default function AdminPage() {
                                       await mutate((key: string) => typeof key === "string" && key.startsWith("admin-justifications"));
                                       setReviewingId(null);
                                       setRejectComment("");
-                                    } catch { /* ignore */ } finally {
+                                      showToast.success("Justificatif refuse.");
+                                    } catch { showToast.error("Erreur lors du refus du justificatif."); } finally {
                                       setReviewLoading(false);
                                     }
                                   }}
@@ -271,7 +233,8 @@ export default function AdminPage() {
                                   try {
                                     await reviewJustification(j.id, "approved");
                                     await mutate((key: string) => typeof key === "string" && key.startsWith("admin-justifications"));
-                                  } catch { /* ignore */ } finally {
+                                    showToast.success("Justificatif approuve.");
+                                  } catch { showToast.error("Erreur lors de l'approbation du justificatif."); } finally {
                                     setReviewLoading(false);
                                   }
                                 }}
@@ -312,17 +275,35 @@ export default function AdminPage() {
               </div>
             )}
           </div>
+          </div>
         </div>
 
         {/* Students Table */}
         <div className="bg-[var(--color-surface-card)] rounded-2xl shadow-sm border border-[var(--color-border-light)] overflow-hidden">
-          <div className="px-5 py-4 border-b border-[var(--color-border-light)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <button
+            onClick={() => toggleSection("students")}
+            className="w-full px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-3 text-left md:cursor-default"
+          >
             <h2
               className="text-lg font-bold text-[var(--color-text)]"
               style={{ fontFamily: "var(--font-playfair)" }}
             >
               Etudiants
             </h2>
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className={`text-[var(--color-text-muted)] md:hidden transition-transform ${collapsed.students ? "" : "rotate-180"}`}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          <div className={`${collapsed.students ? "hidden md:block" : ""}`}>
+          <div className="px-5 py-4 border-b border-[var(--color-border-light)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="relative">
               <svg
                 width="16"
@@ -437,19 +418,35 @@ export default function AdminPage() {
               Aucun etudiant trouve
             </div>
           )}
+          </div>
         </div>
 
         {/* Professors Table */}
         <div className="bg-[var(--color-surface-card)] rounded-2xl shadow-sm border border-[var(--color-border-light)] overflow-hidden mt-8">
-          <div className="px-5 py-4 border-b border-[var(--color-border-light)]">
+          <button
+            onClick={() => toggleSection("profs")}
+            className="w-full px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between text-left md:cursor-default"
+          >
             <h2
               className="text-lg font-bold text-[var(--color-text)]"
               style={{ fontFamily: "var(--font-playfair)" }}
             >
               Professeurs
             </h2>
-          </div>
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className={`text-[var(--color-text-muted)] md:hidden transition-transform ${collapsed.profs ? "" : "rotate-180"}`}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
 
+          <div className={`${collapsed.profs ? "hidden md:block" : ""}`}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -498,27 +495,46 @@ export default function AdminPage() {
               Aucun professeur trouve
             </div>
           )}
+          </div>
         </div>
 
         {/* Audit Logs Section */}
         <div className="mt-8 mb-8">
-          <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => toggleSection("audit")}
+            className="flex items-center justify-between mb-4 w-full text-left md:cursor-default"
+          >
             <h2
               className="text-2xl font-bold text-[var(--color-text)]"
               style={{ fontFamily: "var(--font-playfair)" }}
             >
               Logs d&apos;audit
             </h2>
-            <a
-              href={`${API_URL}/api/v1/admin/audit-logs/export-csv`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white hover:opacity-90 transition-opacity"
-            >
-              Exporter CSV
-            </a>
-          </div>
+            <div className="flex items-center gap-2">
+              <a
+                href={`${API_URL}/api/v1/admin/audit-logs/export-csv`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white hover:opacity-90 transition-opacity"
+              >
+                Exporter CSV
+              </a>
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className={`text-[var(--color-text-muted)] md:hidden transition-transform ${collapsed.audit ? "" : "rotate-180"}`}
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </div>
+          </button>
 
+          <div className={`${collapsed.audit ? "hidden md:block" : ""}`}>
           <div className="flex gap-2 mb-4">
             {[
               { label: "Tous", value: "" },
@@ -619,20 +635,35 @@ export default function AdminPage() {
               </div>
             )}
           </div>
+          </div>
         </div>
 
         {/* Exports Section */}
         <div className="bg-[var(--color-surface-card)] rounded-2xl shadow-sm border border-[var(--color-border-light)] overflow-hidden mt-8 mb-8">
-          <div className="px-5 py-4 border-b border-[var(--color-border-light)]">
+          <button
+            onClick={() => toggleSection("exports")}
+            className="w-full px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between text-left md:cursor-default"
+          >
             <h2
               className="text-lg font-bold text-[var(--color-text)]"
               style={{ fontFamily: "var(--font-playfair)" }}
             >
               Exports
             </h2>
-          </div>
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className={`text-[var(--color-text-muted)] md:hidden transition-transform ${collapsed.exports ? "" : "rotate-180"}`}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
 
-          <div className="p-5 space-y-4">
+          <div className={`${collapsed.exports ? "hidden md:block" : ""} p-5 space-y-4`}>
             <div className="flex flex-wrap gap-3">
               <div>
                 <label className="block text-xs font-semibold text-[var(--color-text-muted)] mb-1 uppercase tracking-wider">Date debut</label>
@@ -684,7 +715,8 @@ export default function AdminPage() {
                       const name = student ? `${student.last_name}_${student.first_name}` : "certificat";
                       downloadBlob(blob, `certificat_${name}.pdf`);
                     }
-                  } catch { /* ignore */ } finally {
+                    showToast.success("Certificat genere avec succes.");
+                  } catch { showToast.error("Erreur lors de la generation du certificat."); } finally {
                     setExportLoading(false);
                   }
                 }}
@@ -720,7 +752,6 @@ export default function AdminPage() {
           </div>
         </div>
       </main>
-    </div>
   );
 }
 

@@ -1,3 +1,5 @@
+import { showToast } from "@/lib/toast";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 class ApiClient {
@@ -47,7 +49,13 @@ class ApiClient {
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
-    const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+    let res: Response;
+    try {
+      res = await fetch(`${API_URL}${path}`, { ...options, headers });
+    } catch {
+      showToast.error("Erreur reseau. Verifiez votre connexion.");
+      throw new Error("Network error");
+    }
     if (!res.ok) {
       if (res.status === 401) {
         this.clearToken();

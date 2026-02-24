@@ -15,7 +15,7 @@ export function CourseCard({ course }: { course: Course }) {
   return (
     <div
       className={`
-        relative overflow-hidden rounded-2xl border transition-all duration-300
+        relative overflow-hidden rounded-2xl border transition-all duration-300 course-card-hover
         ${
           isActive
             ? "border-[var(--color-accent)] bg-[var(--color-surface-elevated)] shadow-md"

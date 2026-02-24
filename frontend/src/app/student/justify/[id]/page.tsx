@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { StudentHeader } from "@/components/student-header";
 import { submitJustification } from "@/hooks/use-justifications";
+import { showToast } from "@/lib/toast";
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + " o";
@@ -61,9 +62,10 @@ export default function JustifyPage() {
     setError("");
     try {
       await submitJustification(id, reason.trim(), files);
-      router.push("/student?justified=1");
+      showToast.success("Justification envoyee avec succes.");
+      router.push("/student");
     } catch {
-      setError("Erreur lors de l'envoi de la justification. Veuillez reessayer.");
+      showToast.error("Erreur lors de l'envoi de la justification. Veuillez reessayer.");
     } finally {
       setSubmitting(false);
     }

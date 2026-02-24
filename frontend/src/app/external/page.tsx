@@ -1,6 +1,7 @@
 "use client";
 import { useAuth } from "@/hooks/use-auth";
 import { useExternalDashboard, useExternalReports } from "@/hooks/use-external";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
@@ -46,17 +47,20 @@ export default function ExternalPage() {
               <p className="text-xs text-white/60">Espace tuteur / entreprise</p>
             </div>
           </div>
-          <button
-            onClick={() => { logout(); router.push("/login"); }}
-            className="flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition-colors bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-            Deconnexion
-          </button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <button
+              onClick={() => { logout(); router.push("/login"); }}
+              className="flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition-colors bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              Deconnexion
+            </button>
+          </div>
         </div>
       </header>
 

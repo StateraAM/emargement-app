@@ -1,3 +1,6 @@
+import os
+os.environ["TESTING"] = "1"
+
 import uuid
 import asyncio
 from datetime import datetime, date, time, timedelta

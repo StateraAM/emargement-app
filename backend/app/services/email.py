@@ -1,5 +1,6 @@
 import resend
 from app.core.config import settings
+from app.services.email_templates import signature_email, monthly_report, justification_reviewed
 
 
 class EmailService:
@@ -18,14 +19,7 @@ class EmailService:
             "from": "Emargement <noreply@yourdomain.com>",
             "to": student_email,
             "subject": f"Signez votre presence - {course_name}",
-            "html": f"""
-                <h2>Bonjour {student_name},</h2>
-                <p>Vous avez ete note(e) present(e) au cours <strong>{course_name}</strong> du {course_date}.</p>
-                <p><a href="{signature_url}" style="background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;">
-                    Signer ma presence
-                </a></p>
-                <p>Ce lien expire dans 24 heures.</p>
-            """,
+            "html": signature_email(student_name, course_name, course_date, signature_url),
         })
 
     async def send_monthly_report(
@@ -41,14 +35,27 @@ class EmailService:
             "from": "Emargement <noreply@yourdomain.com>",
             "to": contact_email,
             "subject": f"Rapport d'assiduite - {student_name} - {month}",
-            "html": f"""
-                <h2>Bonjour {contact_name},</h2>
-                <p>Veuillez trouver ci-joint le rapport d'assiduite mensuel de <strong>{student_name}</strong> pour le mois de {month}.</p>
-            """,
+            "html": monthly_report(contact_name, student_name, month),
             "attachments": [{
                 "filename": f"rapport-assiduite-{student_name.lower().replace(' ', '-')}-{month}.pdf",
                 "content": base64.b64encode(pdf_bytes).decode(),
             }],
+        })
+
+    async def send_justification_reviewed(
+        self, student_email: str, student_name: str,
+        course_name: str, course_date: str, status: str,
+    ):
+        if not settings.RESEND_API_KEY:
+            print(f"[DEV] Justification {status} email for {student_name} - {course_name}")
+            return
+
+        subject_status = "acceptee" if status == "approved" else "refusee"
+        resend.Emails.send({
+            "from": "Emargement <noreply@yourdomain.com>",
+            "to": student_email,
+            "subject": f"Justification {subject_status} - {course_name}",
+            "html": justification_reviewed(student_name, course_name, course_date, status),
         })
 
 

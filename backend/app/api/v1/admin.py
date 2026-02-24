@@ -23,6 +23,7 @@ from app.schemas.student import StudentWithAttendanceResponse
 from app.schemas.auth import ProfessorResponse
 from app.schemas.attendance import JustificationAdminResponse, ReviewJustificationRequest
 from app.services.audit import create_audit_log
+from app.core.sanitize import sanitize_text
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -166,6 +167,10 @@ async def review_justification(
         raise HTTPException(status_code=400, detail="Already reviewed")
     if body.decision not in ("approved", "rejected"):
         raise HTTPException(status_code=400, detail="Decision must be 'approved' or 'rejected'")
+
+    # Sanitize admin comment
+    if body.comment:
+        body.comment = sanitize_text(body.comment)
 
     justif.status = body.decision
     justif.reviewed_at = datetime.utcnow()

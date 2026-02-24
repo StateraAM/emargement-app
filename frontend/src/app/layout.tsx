@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Source_Sans_3, Playfair_Display } from "next/font/google";
+import ToasterProvider from "@/components/ToasterProvider";
 import "./globals.css";
 
 const sourceSans = Source_Sans_3({
@@ -33,10 +34,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr">
+    <html lang="fr" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}})()`,
+          }}
+        />
+      </head>
       <body
         className={`${sourceSans.variable} ${playfair.variable} antialiased`}
       >
+        <ToasterProvider />
         {children}
       </body>
     </html>

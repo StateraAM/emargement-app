@@ -2,6 +2,8 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useTodayCourses } from "@/hooks/use-courses";
 import { CourseCard } from "@/components/course-card";
+import { DashboardSkeleton } from "@/components/skeleton";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
@@ -15,12 +17,7 @@ export default function DashboardPage() {
   }, [authLoading, professor, router]);
 
   if (authLoading || isLoading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--color-surface)]">
-        <div className="w-8 h-8 border-3 border-[var(--color-primary)]/20 border-t-[var(--color-primary)] rounded-full animate-spin mb-4" />
-        <p className="text-[var(--color-text-muted)] text-sm">Chargement...</p>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   const today = new Date().toLocaleDateString("fr-FR", {
@@ -44,12 +41,13 @@ export default function DashboardPage() {
                 Emargement
               </h1>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-medium text-white/90">
                   {professor?.first_name} {professor?.last_name}
                 </p>
               </div>
+              <ThemeToggle />
               <button
                 onClick={() => {
                   logout();

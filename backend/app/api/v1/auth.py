@@ -1,5 +1,5 @@
 import uuid as uuid_mod
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,6 +7,7 @@ from sqlalchemy import select
 from app.core.database import get_db
 from app.core.config import settings
 from app.core.auth import verify_password, create_access_token, get_current_professor
+from app.core.rate_limit import limiter
 from app.models.professor import Professor
 from app.models.student import Student
 from app.models.student_contact import StudentContact
@@ -17,25 +18,26 @@ security = HTTPBearer()
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login(request: Request, login_data: LoginRequest, db: AsyncSession = Depends(get_db)):
     # Try professor first
-    result = await db.execute(select(Professor).where(Professor.email == request.email))
+    result = await db.execute(select(Professor).where(Professor.email == login_data.email))
     professor = result.scalar_one_or_none()
-    if professor and verify_password(request.password, professor.password_hash):
+    if professor and verify_password(login_data.password, professor.password_hash):
         token = create_access_token({"sub": str(professor.id), "role": professor.role}, user_type="professor")
         return TokenResponse(access_token=token)
 
     # Try student
-    result = await db.execute(select(Student).where(Student.email == request.email))
+    result = await db.execute(select(Student).where(Student.email == login_data.email))
     student = result.scalar_one_or_none()
-    if student and student.password_hash and verify_password(request.password, student.password_hash):
+    if student and student.password_hash and verify_password(login_data.password, student.password_hash):
         token = create_access_token({"sub": str(student.id)}, user_type="student")
         return TokenResponse(access_token=token)
 
     # Try external (student contact) login
-    contact_result = await db.execute(select(StudentContact).where(StudentContact.email == request.email))
+    contact_result = await db.execute(select(StudentContact).where(StudentContact.email == login_data.email))
     contact = contact_result.scalar_one_or_none()
-    if contact and contact.password_hash and verify_password(request.password, contact.password_hash):
+    if contact and contact.password_hash and verify_password(login_data.password, contact.password_hash):
         token = create_access_token({"sub": str(contact.id)}, user_type="external")
         return TokenResponse(access_token=token)
 

@@ -6,11 +6,13 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.database import get_db
+from app.core.rate_limit import limiter
 from app.models.attendance_record import AttendanceRecord
 from app.models.course import Course
 from app.models.student import Student
 from app.models.professor import Professor
 from app.schemas.attendance import SignatureResponse
+from app.services.ws_manager import ws_manager
 
 router = APIRouter(prefix="/signatures", tags=["signatures"])
 
@@ -57,6 +59,7 @@ async def get_signature_info(token: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/sign/{token}", response_model=SignatureResponse)
+@limiter.limit("10/minute")
 async def sign_attendance(
     token: str,
     request: Request,
@@ -99,6 +102,13 @@ async def sign_attendance(
     if body.signature_data:
         record.signature_data = body.signature_data
     await db.commit()
+
+    await ws_manager.broadcast(str(course.id), {
+        "type": "signature",
+        "student_id": str(student.id),
+        "student_name": f"{student.first_name} {student.last_name}",
+        "signed_at": record.signed_at.isoformat(),
+    })
 
     return SignatureResponse(
         course_name=course.name,

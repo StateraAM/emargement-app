@@ -20,6 +20,8 @@ from app.models.justification import Justification
 from app.schemas.notification import NotificationResponse
 from app.schemas.attendance import SignatureSubmitRequest
 from app.services.audit import create_audit_log
+from app.core.sanitize import sanitize_text
+from app.services.ws_manager import ws_manager
 
 router = APIRouter(prefix="/student", tags=["student"])
 
@@ -216,6 +218,13 @@ async def sign_attendance_record(
     )
     await db.commit()
 
+    await ws_manager.broadcast(str(record.course_id), {
+        "type": "signature",
+        "student_id": str(student.id),
+        "student_name": f"{student.first_name} {student.last_name}",
+        "signed_at": record.signed_at.isoformat(),
+    })
+
     return {"ok": True, "signed_at": record.signed_at.isoformat()}
 
 
@@ -248,6 +257,9 @@ async def justify_absence(
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Justification already submitted for this record")
+
+    # Sanitize reason text
+    reason = sanitize_text(reason)
 
     # Validate files
     for f in files:

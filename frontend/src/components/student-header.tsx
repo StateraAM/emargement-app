@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { NotificationBell } from "@/components/notification-bell";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface StudentHeaderProps {
   title?: string;
@@ -44,7 +45,7 @@ export function StudentHeader({ title, showBack }: StudentHeaderProps) {
               {title || "Emargement"}
             </h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {user && (
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-medium text-white/90">
@@ -53,6 +54,7 @@ export function StudentHeader({ title, showBack }: StudentHeaderProps) {
               </div>
             )}
             <NotificationBell />
+            <ThemeToggle />
             <button
               onClick={() => {
                 logout();

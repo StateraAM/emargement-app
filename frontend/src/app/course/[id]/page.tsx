@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useCourseStudents } from "@/hooks/use-courses";
 import {
@@ -11,7 +11,17 @@ import {
   type AttendanceRecord,
 } from "@/hooks/use-attendance";
 import { useAuth } from "@/hooks/use-auth";
+import { useWebSocket } from "@/hooks/use-websocket";
+import { CourseSkeleton } from "@/components/skeleton";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { API_URL } from "@/lib/api";
+import { showToast } from "@/lib/toast";
+
+interface LiveSignature {
+  student_id: string;
+  student_name: string;
+  signed_at: string;
+}
 
 type Status = "present" | "absent" | "late";
 
@@ -52,7 +62,24 @@ export default function AttendancePage() {
   const [showQr, setShowQr] = useState(false);
   const [attendanceStatus, setAttendanceStatus] = useState<AttendanceStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
+  const [liveSignatures, setLiveSignatures] = useState<LiveSignature[]>([]);
   const router = useRouter();
+
+  const handleWsMessage = useCallback((msg: { type: string; student_id: string; student_name: string; signed_at: string }) => {
+    if (msg.type === "signature") {
+      setLiveSignatures((prev) => {
+        if (prev.some((s) => s.student_id === msg.student_id)) return prev;
+        return [...prev, { student_id: msg.student_id, student_name: msg.student_name, signed_at: msg.signed_at }];
+      });
+      showToast.success(`${msg.student_name} a signe`);
+    }
+  }, []);
+
+  const { connected: wsConnected } = useWebSocket({
+    courseId: id,
+    enabled: submitted,
+    onMessage: handleWsMessage,
+  });
 
   const isValidated = attendanceStatus?.validated ?? false;
   const isEditable = attendanceStatus?.editable ?? true;
@@ -91,14 +118,7 @@ export default function AttendancePage() {
   }, [id]);
 
   if (authLoading || isLoading || statusLoading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--color-surface)]">
-        <div className="w-8 h-8 border-3 border-[var(--color-primary)]/20 border-t-[var(--color-primary)] rounded-full animate-spin mb-4" />
-        <p className="text-[var(--color-text-muted)] text-sm">
-          Chargement des etudiants...
-        </p>
-      </div>
-    );
+    return <CourseSkeleton />;
   }
 
   const getStatus = (studentId: string): Status =>
@@ -134,7 +154,7 @@ export default function AttendancePage() {
       }
       setSubmitted(true);
     } catch {
-      alert("Erreur lors de la validation");
+      showToast.error("Erreur lors de la validation");
     } finally {
       setSubmitting(false);
     }
@@ -216,6 +236,69 @@ export default function AttendancePage() {
             </div>
           )}
 
+          {/* Live Signatures */}
+          <div className="text-left mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <h3 className="text-sm font-semibold text-[var(--color-text)]">
+                Signatures en direct
+              </h3>
+              <span
+                className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                  wsConnected
+                    ? "bg-[var(--color-success-bg)] text-[var(--color-success)]"
+                    : "bg-[var(--color-warning-bg)] text-[var(--color-warning)]"
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    wsConnected
+                      ? "bg-[var(--color-success)] animate-pulse-soft"
+                      : "bg-[var(--color-warning)]"
+                  }`}
+                />
+                {wsConnected ? "Connecte" : "Reconnexion..."}
+              </span>
+            </div>
+
+            {liveSignatures.length === 0 ? (
+              <p className="text-xs text-[var(--color-text-muted)]">
+                En attente de signatures...
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {liveSignatures.map((sig) => (
+                  <div
+                    key={sig.student_id}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-success-bg)] border border-[var(--color-success-border)] animate-fade-in"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="var(--color-success)"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M9 12l2 2 4-4" />
+                      <circle cx="12" cy="12" r="10" />
+                    </svg>
+                    <span className="text-sm font-medium text-[var(--color-success)]">
+                      {sig.student_name}
+                    </span>
+                    <span className="text-xs text-[var(--color-text-muted)] ml-auto">
+                      {new Date(sig.signed_at).toLocaleTimeString("fr-FR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button
             onClick={() => router.push("/dashboard")}
             className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-semibold hover:bg-[var(--color-primary-dark)] transition-all active:scale-[0.98]"
@@ -251,7 +334,8 @@ export default function AttendancePage() {
             Retour
           </button>
           <div className="h-4 w-px bg-white/20" />
-          <h1 className="font-semibold text-sm">Faire l&apos;appel</h1>
+          <h1 className="font-semibold text-sm flex-1">Faire l&apos;appel</h1>
+          <ThemeToggle />
         </div>
       </header>
 
@@ -354,7 +438,7 @@ export default function AttendancePage() {
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3">
                     <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center ${config.text} bg-white/60`}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center ${config.text} bg-[var(--color-surface-card)]/60`}
                     >
                       <svg
                         width="16"
@@ -384,7 +468,7 @@ export default function AttendancePage() {
                     </div>
                   </div>
                   <span
-                    className={`text-sm font-semibold ${config.text} px-2.5 py-1 rounded-lg bg-white/50`}
+                    className={`text-sm font-semibold ${config.text} px-2.5 py-1 rounded-lg bg-[var(--color-surface-card)]/50`}
                   >
                     {config.label}
                   </span>

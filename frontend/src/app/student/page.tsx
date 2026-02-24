@@ -3,7 +3,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useNotifications } from "@/hooks/use-notifications";
 import { useJustifications } from "@/hooks/use-justifications";
 import { StudentHeader } from "@/components/student-header";
-import { useRouter, useSearchParams } from "next/navigation";
+import { StudentSkeleton } from "@/components/skeleton";
+import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import useSWR from "swr";
 import { api } from "@/lib/api";
@@ -98,14 +99,7 @@ function justificationBadge(status: string): { text: string; className: string }
 
 export default function StudentDashboardPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--color-surface)]">
-          <div className="w-8 h-8 border-3 border-[var(--color-primary)]/20 border-t-[var(--color-primary)] rounded-full animate-spin mb-4" />
-          <p className="text-[var(--color-text-muted)] text-sm">Chargement...</p>
-        </div>
-      }
-    >
+    <Suspense fallback={<StudentSkeleton />}>
       <StudentDashboard />
     </Suspense>
   );
@@ -117,8 +111,6 @@ function StudentDashboard() {
   const { justifications } = useJustifications();
   const { data: history, isLoading: historyLoading } = useAttendanceHistory();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [showSuccess, setShowSuccess] = useState(false);
   const [filters, setFilters] = useState<Set<string>>(new Set(["absent", "late"]));
 
   const toggleFilter = (key: string) => {
@@ -134,26 +126,13 @@ function StudentDashboard() {
   };
 
   useEffect(() => {
-    if (searchParams.get("justified") === "1") {
-      setShowSuccess(true);
-      const timer = setTimeout(() => setShowSuccess(false), 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [searchParams]);
-
-  useEffect(() => {
     if (!authLoading && (!user || !isStudent)) {
       router.push("/login");
     }
   }, [authLoading, user, isStudent, router]);
 
   if (authLoading || historyLoading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--color-surface)]">
-        <div className="w-8 h-8 border-3 border-[var(--color-primary)]/20 border-t-[var(--color-primary)] rounded-full animate-spin mb-4" />
-        <p className="text-[var(--color-text-muted)] text-sm">Chargement...</p>
-      </div>
-    );
+    return <StudentSkeleton />;
   }
 
   if (!user) return null;
@@ -181,28 +160,6 @@ function StudentDashboard() {
 
       {/* Content */}
       <main className="max-w-2xl mx-auto px-4 py-6 animate-fade-in">
-        {/* Success message */}
-        {showSuccess && (
-          <div className="mb-6 flex items-center gap-2 text-[var(--color-success)] text-sm bg-[var(--color-success-bg)] px-4 py-3 rounded-xl border border-[var(--color-success-border)] animate-fade-in">
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M9 12l2 2 4-4" />
-              <circle cx="12" cy="12" r="10" />
-            </svg>
-            <span className="font-medium">
-              Justification envoyee avec succes.
-            </span>
-          </div>
-        )}
-
         {/* Pending Signatures */}
         <section className="mb-8">
           <h2
@@ -328,7 +285,68 @@ function StudentDashboard() {
               </p>
             </div>
           ) : (
-            <div className="bg-[var(--color-surface-card)] rounded-2xl border border-[var(--color-border-light)] overflow-hidden">
+            <>
+            {/* Mobile card layout */}
+            <div className="space-y-3 sm:hidden stagger-children">
+              {history.filter((r) => filters.has(r.status)).map((record) => {
+                const status = statusLabel(record.status);
+                const justStatus = getJustificationStatus(record);
+                return (
+                  <div
+                    key={record.id}
+                    className="bg-[var(--color-surface-card)] rounded-2xl border border-[var(--color-border-light)] p-4 animate-scale-in"
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-medium text-[var(--color-text)] text-sm">{record.course_name}</p>
+                        <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
+                          {formatDate(record.course_date)} {record.room ? `\u00B7 Salle ${record.room}` : ""}
+                        </p>
+                      </div>
+                      <span
+                        className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${status.className}`}
+                      >
+                        {status.text}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-3">
+                      <div className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
+                        {record.signed_at ? (
+                          <>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M9 12l2 2 4-4" />
+                              <circle cx="12" cy="12" r="10" />
+                            </svg>
+                            <span className="text-[var(--color-success)] font-medium">Signe</span>
+                          </>
+                        ) : (
+                          <span>Non signe</span>
+                        )}
+                      </div>
+                      <div className="ml-auto">
+                        {justStatus ? (
+                          <span
+                            className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${justificationBadge(justStatus).className}`}
+                          >
+                            {justificationBadge(justStatus).text}
+                          </span>
+                        ) : canJustify(record) ? (
+                          <button
+                            onClick={() => router.push(`/student/justify/${record.id}`)}
+                            className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-dark)] active:scale-[0.97] transition-all"
+                          >
+                            Justifier
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop table layout */}
+            <div className="hidden sm:block bg-[var(--color-surface-card)] rounded-2xl border border-[var(--color-border-light)] overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -369,7 +387,7 @@ function StudentDashboard() {
                             {record.course_name}
                           </td>
                           <td className="px-3 py-3 text-[var(--color-text-secondary)] whitespace-nowrap">
-                            {record.room || "—"}
+                            {record.room || "\u2014"}
                           </td>
                           <td className="px-3 py-3 text-center">
                             <span
@@ -396,7 +414,7 @@ function StudentDashboard() {
                               </svg>
                             ) : (
                               <span className="text-[var(--color-text-muted)]">
-                                —
+                                \u2014
                               </span>
                             )}
                           </td>
@@ -418,7 +436,7 @@ function StudentDashboard() {
                               </button>
                             ) : (
                               <span className="text-[var(--color-text-muted)]">
-                                —
+                                \u2014
                               </span>
                             )}
                           </td>
@@ -429,6 +447,7 @@ function StudentDashboard() {
                 </table>
               </div>
             </div>
+            </>
           )}
         </section>
       </main>
