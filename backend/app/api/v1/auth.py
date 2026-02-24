@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.core.auth import verify_password, create_access_token, get_current_professor
 from app.models.professor import Professor
 from app.models.student import Student
+from app.models.student_contact import StudentContact
 from app.schemas.auth import LoginRequest, TokenResponse, ProfessorResponse, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -29,6 +30,13 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
     student = result.scalar_one_or_none()
     if student and student.password_hash and verify_password(request.password, student.password_hash):
         token = create_access_token({"sub": str(student.id)}, user_type="student")
+        return TokenResponse(access_token=token)
+
+    # Try external (student contact) login
+    contact_result = await db.execute(select(StudentContact).where(StudentContact.email == request.email))
+    contact = contact_result.scalar_one_or_none()
+    if contact and contact.password_hash and verify_password(request.password, contact.password_hash):
+        token = create_access_token({"sub": str(contact.id)}, user_type="external")
         return TokenResponse(access_token=token)
 
     raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -56,6 +64,16 @@ async def get_me(
             id=str(student.id), email=student.email,
             first_name=student.first_name, last_name=student.last_name,
             user_type="student",
+        )
+    elif user_type == "external":
+        result = await db.execute(select(StudentContact).where(StudentContact.id == user_uuid))
+        contact = result.scalar_one_or_none()
+        if not contact:
+            raise HTTPException(status_code=401, detail="Contact not found")
+        return UserResponse(
+            id=str(contact.id), email=contact.email,
+            first_name=contact.first_name, last_name=contact.last_name,
+            user_type="external",
         )
     else:
         result = await db.execute(select(Professor).where(Professor.id == user_uuid))

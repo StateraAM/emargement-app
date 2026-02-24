@@ -19,6 +19,7 @@ class StudentContact(Base):
     first_name: Mapped[str] = mapped_column(String, nullable=False)
     last_name: Mapped[str] = mapped_column(String, nullable=False)
     company: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    password_hash: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     student: Mapped["Student"] = relationship(back_populates="contacts")

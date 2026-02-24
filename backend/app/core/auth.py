@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models.professor import Professor
 from app.models.student import Student
+from app.models.student_contact import StudentContact
 
 pwd_context = CryptContext(schemes=["bcrypt"])
 security = HTTPBearer()
@@ -81,3 +82,25 @@ async def require_admin(professor: Professor = Depends(get_current_professor)) -
     if professor.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return professor
+
+
+async def get_current_external(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db),
+) -> StudentContact:
+    try:
+        payload = jwt.decode(credentials.credentials, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        if payload.get("user_type") != "external":
+            raise HTTPException(status_code=403, detail="External access required")
+        contact_id = payload.get("sub")
+        if contact_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        contact_id = uuid_mod.UUID(contact_id)
+    except (JWTError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    result = await db.execute(select(StudentContact).where(StudentContact.id == contact_id))
+    contact = result.scalar_one_or_none()
+    if contact is None:
+        raise HTTPException(status_code=401, detail="Contact not found")
+    return contact

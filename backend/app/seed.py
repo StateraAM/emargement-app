@@ -59,12 +59,14 @@ async def seed():
                     student_id=s.id, type="parent",
                     email="parent.%s@mail.fr" % s.last_name.lower(),
                     first_name="Parent", last_name=s.last_name,
+                    password_hash=pwd_context.hash("parent123"),
                 ))
                 db.add(StudentContact(
                     student_id=s.id, type="tutor",
                     email="tuteur.%s@entreprise.fr" % s.last_name.lower(),
                     first_name="Tuteur", last_name=s.last_name,
                     company="Entreprise SA",
+                    password_hash=pwd_context.hash("parent123"),
                 ))
 
         # --- Courses ---
