@@ -19,6 +19,7 @@ from app.models.course import Course
 from app.models.course_enrollment import CourseEnrollment
 from app.models.attendance_record import AttendanceRecord
 from app.models.justification import Justification
+from app.models.justification_comment import JustificationComment
 from app.models.monthly_report import MonthlyReport
 from app.models.notification import Notification
 from app.models.audit_log import AuditLog
@@ -453,6 +454,105 @@ async def serve_justification_file_admin(
     if not await asyncio.to_thread(file_path.exists):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_path)
+
+
+@router.get("/justifications/{justification_id}")
+async def get_justification_detail(
+    justification_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = (
+        select(Justification, Student, AttendanceRecord, Course, Professor)
+        .join(Student, Justification.student_id == Student.id)
+        .join(AttendanceRecord, Justification.attendance_record_id == AttendanceRecord.id)
+        .join(Course, AttendanceRecord.course_id == Course.id)
+        .outerjoin(Professor, Justification.reviewed_by == Professor.id)
+        .where(Justification.id == UUID(justification_id))
+    )
+    result = await db.execute(stmt)
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Justification not found")
+
+    justif, student, record, course, reviewer = row
+    file_names = json.loads(justif.file_paths) if justif.file_paths else []
+    file_urls = [
+        f"/api/v1/admin/justification-files/{justif.id}/{fname}"
+        for fname in file_names
+    ]
+
+    # Get comments
+    comment_stmt = (
+        select(JustificationComment)
+        .where(JustificationComment.justification_id == justif.id)
+        .order_by(JustificationComment.created_at.asc())
+    )
+    comments = (await db.execute(comment_stmt)).scalars().all()
+
+    return {
+        "id": str(justif.id),
+        "student_id": str(student.id),
+        "student_name": f"{student.first_name} {student.last_name}",
+        "student_email": student.email,
+        "course_name": course.name,
+        "course_date": course.start_time.strftime("%d/%m/%Y %H:%M"),
+        "reason": justif.reason,
+        "file_urls": file_urls,
+        "status": justif.status,
+        "created_at": justif.created_at.isoformat(),
+        "reviewed_by_name": f"{reviewer.first_name} {reviewer.last_name}" if reviewer else None,
+        "reviewed_at": justif.reviewed_at.isoformat() if justif.reviewed_at else None,
+        "comments": [
+            {
+                "id": str(c.id),
+                "author_type": c.author_type,
+                "author_name": c.author_name,
+                "message": c.message,
+                "created_at": c.created_at.isoformat(),
+            }
+            for c in comments
+        ],
+    }
+
+
+@router.post("/justifications/{justification_id}/comment")
+async def add_justification_comment(
+    justification_id: str,
+    body: dict,
+    professor: Professor = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    justif = (await db.execute(
+        select(Justification).where(Justification.id == UUID(justification_id))
+    )).scalar_one_or_none()
+    if not justif:
+        raise HTTPException(status_code=404, detail="Justification not found")
+
+    message = sanitize_text(body.get("message", ""))
+    if not message:
+        raise HTTPException(status_code=400, detail="Message is required")
+
+    comment = JustificationComment(
+        justification_id=justif.id,
+        author_type="admin",
+        author_id=professor.id,
+        author_name=f"{professor.first_name} {professor.last_name}",
+        message=message,
+    )
+    db.add(comment)
+
+    # Notify the student
+    notification = Notification(
+        student_id=justif.student_id,
+        type="justification_comment",
+        title="Nouveau commentaire sur votre justificatif",
+        message=f"L'administrateur a ajoute un commentaire: {message[:100]}",
+        data=json.dumps({"justification_id": str(justif.id)}),
+    )
+    db.add(notification)
+    await db.commit()
+
+    return {"ok": True, "comment_id": str(comment.id)}
 
 
 # ---------- Report PDF ----------

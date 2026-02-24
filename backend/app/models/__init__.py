@@ -8,9 +8,10 @@ from app.models.monthly_report import MonthlyReport
 from app.models.notification import Notification
 from app.models.justification import Justification
 from app.models.audit_log import AuditLog
+from app.models.justification_comment import JustificationComment
 
 __all__ = [
     "Professor", "Student", "StudentContact",
     "Course", "CourseEnrollment", "AttendanceRecord", "MonthlyReport",
-    "Notification", "Justification", "AuditLog",
+    "Notification", "Justification", "AuditLog", "JustificationComment",
 ]

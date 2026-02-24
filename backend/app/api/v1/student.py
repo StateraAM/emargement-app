@@ -18,6 +18,7 @@ from app.models.attendance_record import AttendanceRecord
 from app.models.course import Course
 from app.models.professor import Professor
 from app.models.justification import Justification
+from app.models.justification_comment import JustificationComment
 from app.schemas.notification import NotificationResponse
 from app.schemas.attendance import SignatureSubmitRequest
 from app.services.audit import create_audit_log
@@ -401,3 +402,36 @@ async def serve_justification_file(
         raise HTTPException(status_code=404, detail="File not found")
 
     return FileResponse(file_path)
+
+
+@router.post("/justifications/{justification_id}/comment")
+async def add_student_justification_comment(
+    justification_id: str,
+    body: dict,
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    justif = (await db.execute(
+        select(Justification).where(
+            Justification.id == UUID(justification_id),
+            Justification.student_id == student.id,
+        )
+    )).scalar_one_or_none()
+    if not justif:
+        raise HTTPException(status_code=404, detail="Justification not found")
+
+    message = sanitize_text(body.get("message", ""))
+    if not message:
+        raise HTTPException(status_code=400, detail="Message is required")
+
+    comment = JustificationComment(
+        justification_id=justif.id,
+        author_type="student",
+        author_id=student.id,
+        author_name=f"{student.first_name} {student.last_name}",
+        message=message,
+    )
+    db.add(comment)
+    await db.commit()
+
+    return {"ok": True, "comment_id": str(comment.id)}
