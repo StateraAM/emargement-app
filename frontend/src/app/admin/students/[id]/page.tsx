@@ -1,294 +1,315 @@
 "use client";
-import { useParams } from "next/navigation";
+import { useAuth } from "@/hooks/use-auth";
 import { useStudentProfile } from "@/hooks/use-admin";
-import { useState } from "react";
+import { AdminSkeleton } from "@/components/skeleton";
+import { useRouter, useParams } from "next/navigation";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 
-const tabs = [
-  { key: "courses", label: "Par cours" },
-  { key: "professors", label: "Par professeur" },
-  { key: "absences", label: "Absences recentes" },
-  { key: "justifications", label: "Justificatifs" },
-] as const;
-
-type TabKey = (typeof tabs)[number]["key"];
+type Tab = "course" | "professor" | "absences" | "justifications";
 
 export default function StudentProfilePage() {
-  const { id } = useParams<{ id: string }>();
-  const { data, isLoading } = useStudentProfile(id);
-  const [activeTab, setActiveTab] = useState<TabKey>("courses");
+  const { professor, loading, isAdmin } = useAuth();
+  const router = useRouter();
+  const params = useParams();
+  const studentId = params.id as string;
+  const { data: profile } = useStudentProfile(studentId);
+  const [tab, setTab] = useState<Tab>("course");
 
-  if (isLoading || !data) {
-    return (
-      <main className="max-w-6xl mx-auto px-4 py-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 w-64 bg-[var(--color-border-light)] rounded-lg" />
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-24 bg-[var(--color-border-light)] rounded-2xl" />
-            ))}
-          </div>
-          <div className="h-64 bg-[var(--color-border-light)] rounded-2xl" />
-        </div>
-      </main>
-    );
+  useEffect(() => {
+    if (!loading && (!professor || !isAdmin)) router.push("/login");
+  }, [loading, professor, isAdmin, router]);
+
+  if (loading || !profile) {
+    return <AdminSkeleton />;
   }
 
-  const { student, stats } = data;
+  const { student, stats } = profile;
+
+  const tabs: { key: Tab; label: string }[] = [
+    { key: "course", label: "Par matiere" },
+    { key: "professor", label: "Par professeur" },
+    { key: "absences", label: "Absences recentes" },
+    { key: "justifications", label: "Justificatifs" },
+  ];
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-6 animate-fade-in">
-      {/* Student header */}
-      <div className="mb-6">
-        <h1
-          className="text-2xl font-bold text-[var(--color-text)]"
-          style={{ fontFamily: "var(--font-playfair)" }}
-        >
-          {student.last_name} {student.first_name}
-        </h1>
-        <p className="text-sm text-[var(--color-text-muted)] mt-1">{student.email}</p>
-        {student.is_alternance && (
-          <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-[var(--color-accent)]/15 text-[var(--color-accent)] mt-2">
-            Alternance
-          </span>
-        )}
+      {/* Back link */}
+      <Link
+        href="/admin"
+        className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors mb-6"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+        Retour au dashboard
+      </Link>
+
+      {/* Student Header */}
+      <div className="bg-[var(--color-surface-card)] rounded-2xl p-6 shadow-sm border border-[var(--color-border-light)] mb-6">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-full bg-[var(--color-primary)]/10 flex items-center justify-center text-[var(--color-primary)] font-bold text-lg">
+            {student.first_name[0]}{student.last_name[0]}
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-[var(--color-text)]" style={{ fontFamily: "var(--font-playfair)" }}>
+              {student.first_name} {student.last_name}
+            </h1>
+            <p className="text-sm text-[var(--color-text-muted)]">{student.email}</p>
+          </div>
+          {student.is_alternance && (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-[var(--color-accent)]/15 text-[var(--color-accent)]">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+              Alternance
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Stats cards */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
-        <StatMini label="Total cours" value={stats.total_courses} />
-        <StatMini label="Present" value={stats.attended} color="success" />
-        <StatMini label="Absent" value={stats.absent} color="danger" />
-        <StatMini label="Retard" value={stats.late} color="warning" />
-        <StatMini
-          label="Taux"
-          value={`${stats.attendance_rate}%`}
-          color={stats.attendance_rate >= 80 ? "success" : stats.attendance_rate >= 60 ? "warning" : "danger"}
-        />
+        <StatCard label="Total cours" value={stats.total_courses} />
+        <StatCard label="Present" value={stats.attended} color="success" />
+        <StatCard label="Absent" value={stats.absent} color="danger" />
+        <StatCard label="En retard" value={stats.late} color="warning" />
+        <StatCard label="Taux" value={`${stats.attendance_rate}%`} color={stats.attendance_rate >= 80 ? "success" : stats.attendance_rate >= 60 ? "warning" : "danger"} />
       </div>
 
-      {/* Tab navigation */}
-      <div className="flex gap-1 mb-4 border-b border-[var(--color-border-light)]">
-        {tabs.map((tab) => (
+      {/* Tab Navigation */}
+      <div className="flex gap-1 mb-6 border-b border-[var(--color-border-light)]">
+        {tabs.map((t) => (
           <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+            key={t.key}
+            onClick={() => setTab(t.key)}
             className={`relative px-4 py-3 text-sm font-semibold transition-colors ${
-              activeTab === tab.key
+              tab === t.key
                 ? "text-[var(--color-accent)]"
                 : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
             }`}
           >
-            {tab.label}
-            {activeTab === tab.key && (
+            {t.label}
+            {tab === t.key && (
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--color-accent)] rounded-full" />
             )}
           </button>
         ))}
       </div>
 
-      {/* Tab content */}
-      <div className="bg-[var(--color-surface-card)] rounded-2xl shadow-sm border border-[var(--color-border-light)] overflow-hidden">
-        {activeTab === "courses" && <CourseTable rows={data.by_course} />}
-        {activeTab === "professors" && <ProfessorTable rows={data.by_professor} />}
-        {activeTab === "absences" && <AbsenceTable rows={data.recent_absences} />}
-        {activeTab === "justifications" && <JustificationTable rows={data.justifications} />}
-      </div>
+      {/* Tab Content */}
+      {tab === "course" && (
+        <div className="bg-[var(--color-surface-card)] rounded-2xl shadow-sm border border-[var(--color-border-light)] overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-[var(--color-surface)] text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
+                  <th className="text-left px-4 py-3 font-semibold">Matiere</th>
+                  <th className="text-center px-4 py-3 font-semibold">Total</th>
+                  <th className="text-center px-4 py-3 font-semibold">Present</th>
+                  <th className="text-center px-4 py-3 font-semibold">Absent</th>
+                  <th className="text-center px-4 py-3 font-semibold">Retard</th>
+                  <th className="text-center px-4 py-3 font-semibold">Taux</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border-light)]">
+                {profile.by_course.map((c) => (
+                  <tr key={c.course_name} className="hover:bg-[var(--color-surface)] transition-colors">
+                    <td className="px-4 py-3 font-semibold text-[var(--color-text)]">{c.course_name}</td>
+                    <td className="px-4 py-3 text-center text-[var(--color-text-muted)]">{c.total}</td>
+                    <td className="px-4 py-3 text-center text-[var(--color-success)] font-medium">{c.attended}</td>
+                    <td className="px-4 py-3 text-center text-[var(--color-danger)] font-medium">{c.absent}</td>
+                    <td className="px-4 py-3 text-center text-[var(--color-warning)] font-medium">{c.late}</td>
+                    <td className="px-4 py-3 text-center">
+                      <RateBadge rate={c.rate} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {profile.by_course.length === 0 && (
+            <div className="text-center py-12 text-[var(--color-text-muted)] text-sm">Aucune donnee</div>
+          )}
+        </div>
+      )}
+
+      {tab === "professor" && (
+        <div className="bg-[var(--color-surface-card)] rounded-2xl shadow-sm border border-[var(--color-border-light)] overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-[var(--color-surface)] text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
+                  <th className="text-left px-4 py-3 font-semibold">Professeur</th>
+                  <th className="text-center px-4 py-3 font-semibold">Total</th>
+                  <th className="text-center px-4 py-3 font-semibold">Present</th>
+                  <th className="text-center px-4 py-3 font-semibold">Absent</th>
+                  <th className="text-center px-4 py-3 font-semibold">Retard</th>
+                  <th className="text-center px-4 py-3 font-semibold">Taux</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border-light)]">
+                {profile.by_professor.map((p) => (
+                  <tr key={p.professor_name} className="hover:bg-[var(--color-surface)] transition-colors">
+                    <td className="px-4 py-3 font-semibold text-[var(--color-text)]">{p.professor_name}</td>
+                    <td className="px-4 py-3 text-center text-[var(--color-text-muted)]">{p.total}</td>
+                    <td className="px-4 py-3 text-center text-[var(--color-success)] font-medium">{p.attended}</td>
+                    <td className="px-4 py-3 text-center text-[var(--color-danger)] font-medium">{p.absent}</td>
+                    <td className="px-4 py-3 text-center text-[var(--color-warning)] font-medium">{p.late}</td>
+                    <td className="px-4 py-3 text-center">
+                      <RateBadge rate={p.rate} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {profile.by_professor.length === 0 && (
+            <div className="text-center py-12 text-[var(--color-text-muted)] text-sm">Aucune donnee</div>
+          )}
+        </div>
+      )}
+
+      {tab === "absences" && (
+        <div className="bg-[var(--color-surface-card)] rounded-2xl shadow-sm border border-[var(--color-border-light)] overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-[var(--color-surface)] text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
+                  <th className="text-left px-4 py-3 font-semibold">Cours</th>
+                  <th className="text-left px-4 py-3 font-semibold">Date</th>
+                  <th className="text-center px-4 py-3 font-semibold">Statut</th>
+                  <th className="text-center px-4 py-3 font-semibold">Justificatif</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border-light)]">
+                {profile.recent_absences.map((a, i) => (
+                  <tr key={i} className="hover:bg-[var(--color-surface)] transition-colors">
+                    <td className="px-4 py-3 font-semibold text-[var(--color-text)]">{a.course_name}</td>
+                    <td className="px-4 py-3 text-sm text-[var(--color-text-muted)]">{a.date}</td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${
+                        a.status === "absent"
+                          ? "bg-[var(--color-danger-bg)] text-[var(--color-danger)]"
+                          : "bg-[var(--color-warning-bg)] text-[var(--color-warning)]"
+                      }`}>
+                        {a.status === "absent" ? "Absent" : "En retard"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {a.justification_status ? (
+                        <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${
+                          a.justification_status === "approved"
+                            ? "bg-[var(--color-success-bg)] text-[var(--color-success)]"
+                            : a.justification_status === "pending"
+                              ? "bg-[var(--color-warning-bg)] text-[var(--color-warning)]"
+                              : "bg-[var(--color-danger-bg)] text-[var(--color-danger)]"
+                        }`}>
+                          {a.justification_status === "approved" ? "Approuve" : a.justification_status === "pending" ? "En attente" : "Refuse"}
+                        </span>
+                      ) : (
+                        <span className="text-[var(--color-text-muted)]">&mdash;</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {profile.recent_absences.length === 0 && (
+            <div className="text-center py-12 text-[var(--color-text-muted)] text-sm">Aucune absence recente</div>
+          )}
+        </div>
+      )}
+
+      {tab === "justifications" && (
+        <div className="bg-[var(--color-surface-card)] rounded-2xl shadow-sm border border-[var(--color-border-light)] overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-[var(--color-surface)] text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
+                  <th className="text-left px-4 py-3 font-semibold">Cours</th>
+                  <th className="text-left px-4 py-3 font-semibold">Date</th>
+                  <th className="text-left px-4 py-3 font-semibold">Raison</th>
+                  <th className="text-center px-4 py-3 font-semibold">Statut</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border-light)]">
+                {profile.justifications.map((j) => (
+                  <tr
+                    key={j.id}
+                    onClick={() => router.push(`/admin/justifications/${j.id}`)}
+                    className="hover:bg-[var(--color-surface)] transition-colors cursor-pointer"
+                  >
+                    <td className="px-4 py-3 font-semibold text-[var(--color-text)]">{j.course_name}</td>
+                    <td className="px-4 py-3 text-sm text-[var(--color-text-muted)]">{j.date}</td>
+                    <td className="px-4 py-3 text-sm text-[var(--color-text)]">
+                      <span className="max-w-[200px] truncate block">{j.reason}</span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${
+                        j.status === "approved"
+                          ? "bg-[var(--color-success-bg)] text-[var(--color-success)]"
+                          : j.status === "pending"
+                            ? "bg-[var(--color-warning-bg)] text-[var(--color-warning)]"
+                            : "bg-[var(--color-danger-bg)] text-[var(--color-danger)]"
+                      }`}>
+                        {j.status === "approved" ? "Approuve" : j.status === "pending" ? "En attente" : "Refuse"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {profile.justifications.length === 0 && (
+            <div className="text-center py-12 text-[var(--color-text-muted)] text-sm">Aucun justificatif</div>
+          )}
+        </div>
+      )}
     </main>
   );
 }
 
-function StatMini({ label, value, color }: { label: string; value: string | number; color?: string }) {
-  const colorMap: Record<string, string> = {
-    success: "text-[var(--color-success)]",
-    danger: "text-[var(--color-danger)]",
-    warning: "text-[var(--color-warning)]",
-  };
+function StatCard({ label, value, color }: { label: string; value: string | number; color?: string }) {
+  const bgClass = color === "success"
+    ? "bg-[var(--color-success-bg)]"
+    : color === "danger"
+      ? "bg-[var(--color-danger-bg)]"
+      : color === "warning"
+        ? "bg-[var(--color-warning-bg)]"
+        : "bg-[var(--color-primary)]/10";
+  const textClass = color === "success"
+    ? "text-[var(--color-success)]"
+    : color === "danger"
+      ? "text-[var(--color-danger)]"
+      : color === "warning"
+        ? "text-[var(--color-warning)]"
+        : "text-[var(--color-text)]";
+
   return (
     <div className="bg-[var(--color-surface-card)] rounded-2xl p-4 shadow-sm border border-[var(--color-border-light)]">
-      <p className={`text-xl font-bold ${color ? colorMap[color] : "text-[var(--color-text)]"}`}>{value}</p>
-      <p className="text-xs text-[var(--color-text-muted)] mt-0.5 uppercase tracking-wider font-medium">{label}</p>
-    </div>
-  );
-}
-
-function CourseTable({ rows }: { rows: { course_name: string; total: number; attended: number; absent: number; late: number; rate: number }[] }) {
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="bg-[var(--color-surface)] text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
-            <th className="text-left px-4 py-3 font-semibold">Cours</th>
-            <th className="text-center px-4 py-3 font-semibold">Total</th>
-            <th className="text-center px-4 py-3 font-semibold">Pres.</th>
-            <th className="text-center px-4 py-3 font-semibold">Abs.</th>
-            <th className="text-center px-4 py-3 font-semibold">Ret.</th>
-            <th className="text-center px-4 py-3 font-semibold">Taux</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[var(--color-border-light)]">
-          {rows.map((r) => (
-            <tr key={r.course_name} className="hover:bg-[var(--color-surface)] transition-colors">
-              <td className="px-4 py-3 font-semibold text-[var(--color-text)]">{r.course_name}</td>
-              <td className="px-4 py-3 text-center text-[var(--color-text-muted)]">{r.total}</td>
-              <td className="px-4 py-3 text-center text-[var(--color-success)] font-medium">{r.attended}</td>
-              <td className="px-4 py-3 text-center text-[var(--color-danger)] font-medium">{r.absent}</td>
-              <td className="px-4 py-3 text-center text-[var(--color-warning)] font-medium">{r.late}</td>
-              <td className="px-4 py-3 text-center">
-                <RateBadge rate={r.rate} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {rows.length === 0 && <EmptyState />}
-    </div>
-  );
-}
-
-function ProfessorTable({ rows }: { rows: { professor_name: string; total: number; attended: number; absent: number; late: number; rate: number }[] }) {
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="bg-[var(--color-surface)] text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
-            <th className="text-left px-4 py-3 font-semibold">Professeur</th>
-            <th className="text-center px-4 py-3 font-semibold">Total</th>
-            <th className="text-center px-4 py-3 font-semibold">Pres.</th>
-            <th className="text-center px-4 py-3 font-semibold">Abs.</th>
-            <th className="text-center px-4 py-3 font-semibold">Ret.</th>
-            <th className="text-center px-4 py-3 font-semibold">Taux</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[var(--color-border-light)]">
-          {rows.map((r) => (
-            <tr key={r.professor_name} className="hover:bg-[var(--color-surface)] transition-colors">
-              <td className="px-4 py-3 font-semibold text-[var(--color-text)]">{r.professor_name}</td>
-              <td className="px-4 py-3 text-center text-[var(--color-text-muted)]">{r.total}</td>
-              <td className="px-4 py-3 text-center text-[var(--color-success)] font-medium">{r.attended}</td>
-              <td className="px-4 py-3 text-center text-[var(--color-danger)] font-medium">{r.absent}</td>
-              <td className="px-4 py-3 text-center text-[var(--color-warning)] font-medium">{r.late}</td>
-              <td className="px-4 py-3 text-center">
-                <RateBadge rate={r.rate} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {rows.length === 0 && <EmptyState />}
-    </div>
-  );
-}
-
-function AbsenceTable({ rows }: { rows: { course_name: string; date: string; status: string; justification_status: string | null }[] }) {
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="bg-[var(--color-surface)] text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
-            <th className="text-left px-4 py-3 font-semibold">Cours</th>
-            <th className="text-left px-4 py-3 font-semibold">Date</th>
-            <th className="text-center px-4 py-3 font-semibold">Statut</th>
-            <th className="text-center px-4 py-3 font-semibold">Justification</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[var(--color-border-light)]">
-          {rows.map((r, i) => (
-            <tr key={i} className="hover:bg-[var(--color-surface)] transition-colors">
-              <td className="px-4 py-3 font-semibold text-[var(--color-text)]">{r.course_name}</td>
-              <td className="px-4 py-3 text-sm text-[var(--color-text-muted)]">
-                {new Date(r.date).toLocaleDateString("fr-FR")}
-              </td>
-              <td className="px-4 py-3 text-center">
-                <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${
-                  r.status === "absent"
-                    ? "bg-[var(--color-danger-bg)] text-[var(--color-danger)]"
-                    : "bg-[var(--color-warning-bg)] text-[var(--color-warning)]"
-                }`}>
-                  {r.status === "absent" ? "Absent" : "Retard"}
-                </span>
-              </td>
-              <td className="px-4 py-3 text-center">
-                {r.justification_status ? (
-                  <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${
-                    r.justification_status === "approved"
-                      ? "bg-[var(--color-success-bg)] text-[var(--color-success)]"
-                      : r.justification_status === "pending"
-                        ? "bg-[var(--color-warning-bg)] text-[var(--color-warning)]"
-                        : "bg-[var(--color-danger-bg)] text-[var(--color-danger)]"
-                  }`}>
-                    {r.justification_status === "approved" ? "Approuve" : r.justification_status === "pending" ? "En attente" : "Refuse"}
-                  </span>
-                ) : (
-                  <span className="text-xs text-[var(--color-text-muted)]">&mdash;</span>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {rows.length === 0 && <EmptyState />}
-    </div>
-  );
-}
-
-function JustificationTable({ rows }: { rows: { id: string; course_name: string; date: string; reason: string; status: string }[] }) {
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="bg-[var(--color-surface)] text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
-            <th className="text-left px-4 py-3 font-semibold">Cours</th>
-            <th className="text-left px-4 py-3 font-semibold">Date</th>
-            <th className="text-left px-4 py-3 font-semibold">Raison</th>
-            <th className="text-center px-4 py-3 font-semibold">Statut</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[var(--color-border-light)]">
-          {rows.map((r) => (
-            <tr key={r.id} className="hover:bg-[var(--color-surface)] transition-colors">
-              <td className="px-4 py-3 font-semibold text-[var(--color-text)]">{r.course_name}</td>
-              <td className="px-4 py-3 text-sm text-[var(--color-text-muted)]">
-                {new Date(r.date).toLocaleDateString("fr-FR")}
-              </td>
-              <td className="px-4 py-3 text-sm text-[var(--color-text)] max-w-[200px] truncate">{r.reason}</td>
-              <td className="px-4 py-3 text-center">
-                <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${
-                  r.status === "approved"
-                    ? "bg-[var(--color-success-bg)] text-[var(--color-success)]"
-                    : r.status === "pending"
-                      ? "bg-[var(--color-warning-bg)] text-[var(--color-warning)]"
-                      : "bg-[var(--color-danger-bg)] text-[var(--color-danger)]"
-                }`}>
-                  {r.status === "approved" ? "Approuve" : r.status === "pending" ? "En attente" : "Refuse"}
-                </span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {rows.length === 0 && <EmptyState />}
+      <div className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-bold mb-2 ${bgClass} ${textClass}`}>
+        {value}
+      </div>
+      <p className="text-xs text-[var(--color-text-muted)] uppercase tracking-wider font-medium">{label}</p>
     </div>
   );
 }
 
 function RateBadge({ rate }: { rate: number }) {
   return (
-    <span className={`inline-flex items-center justify-center min-w-[3rem] px-2 py-0.5 rounded-full text-xs font-bold ${
-      rate >= 80
-        ? "bg-[var(--color-success-bg)] text-[var(--color-success)]"
-        : rate >= 60
-          ? "bg-[var(--color-warning-bg)] text-[var(--color-warning)]"
-          : "bg-[var(--color-danger-bg)] text-[var(--color-danger)]"
-    }`}>
+    <span
+      className={`inline-flex items-center justify-center min-w-[3rem] px-2 py-0.5 rounded-full text-xs font-bold ${
+        rate >= 80
+          ? "bg-[var(--color-success-bg)] text-[var(--color-success)]"
+          : rate >= 60
+            ? "bg-[var(--color-warning-bg)] text-[var(--color-warning)]"
+            : "bg-[var(--color-danger-bg)] text-[var(--color-danger)]"
+      }`}
+    >
       {rate}%
     </span>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="text-center py-12 text-[var(--color-text-muted)] text-sm">
-      Aucune donnee
-    </div>
   );
 }
