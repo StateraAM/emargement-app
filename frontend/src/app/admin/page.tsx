@@ -511,15 +511,26 @@ export default function AdminPage() {
               Logs d&apos;audit
             </h2>
             <div className="flex items-center gap-2">
-              <a
-                href={`${API_URL}/api/v1/admin/audit-logs/export-csv`}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  try {
+                    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+                    const resp = await fetch(`${API_URL}/api/v1/admin/audit-logs/export-csv`, {
+                      headers: token ? { Authorization: `Bearer ${token}` } : {},
+                    });
+                    if (!resp.ok) throw new Error("Export failed");
+                    const blob = await resp.blob();
+                    downloadBlob(blob, "audit_logs.csv");
+                    showToast.success("Export CSV telecharge.");
+                  } catch {
+                    showToast.error("Erreur lors de l'export CSV.");
+                  }
+                }}
                 className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white hover:opacity-90 transition-opacity"
               >
                 Exporter CSV
-              </a>
+              </button>
               <svg
                 width="18"
                 height="18"
