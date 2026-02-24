@@ -169,6 +169,9 @@ async def get_admin_course_detail(
                 "status": record.status,
                 "signed_at": record.signed_at.isoformat() if record.signed_at else None,
                 "qr_signed_at": record.qr_signed_at.isoformat() if record.qr_signed_at else None,
+                "signature_data": record.signature_data,
+                "signature_ip": record.signature_ip,
+                "signature_user_agent": record.signature_user_agent,
             }
             for record, student in rows
         ],

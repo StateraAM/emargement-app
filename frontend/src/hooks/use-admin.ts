@@ -243,6 +243,9 @@ export interface AdminCourseDetail {
     status: string;
     signed_at: string | null;
     qr_signed_at: string | null;
+    signature_data: string | null;
+    signature_ip: string | null;
+    signature_user_agent: string | null;
   }[];
 }
 
