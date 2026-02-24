@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { AdminSkeleton } from "@/components/skeleton";
@@ -318,7 +319,11 @@ export default function AnalyticsPage() {
                       const rate = s.attendance_rate ?? s.rate ?? 0;
                       return (
                         <tr key={s.student_id} className="hover:bg-[var(--color-surface)] transition-colors">
-                          <td className="px-4 py-3 font-semibold text-[var(--color-text)]">{name}</td>
+                          <td className="px-4 py-3 font-semibold">
+                            <Link href={`/admin/students/${s.student_id}`} className="text-[var(--color-text)] hover:text-[var(--color-accent)] hover:underline transition-colors">
+                              {name}
+                            </Link>
+                          </td>
                           <td className="px-4 py-3 text-[var(--color-text-muted)] hidden md:table-cell">{s.email}</td>
                           <td className="px-4 py-3 text-center text-[var(--color-text-secondary)]">{s.total_courses}</td>
                           <td className="px-4 py-3 text-center text-[var(--color-danger)] font-medium">{s.absent}</td>
