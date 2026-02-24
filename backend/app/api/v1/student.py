@@ -435,3 +435,95 @@ async def add_student_justification_comment(
     await db.commit()
 
     return {"ok": True, "comment_id": str(comment.id)}
+
+
+@router.get("/analytics")
+async def student_analytics(
+    student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+):
+    # Overall stats
+    total = (await db.execute(
+        select(func.count(AttendanceRecord.id)).where(AttendanceRecord.student_id == student.id)
+    )).scalar() or 0
+    attended = (await db.execute(
+        select(func.count(AttendanceRecord.id))
+        .where(AttendanceRecord.student_id == student.id, AttendanceRecord.status == "present")
+    )).scalar() or 0
+    absent = (await db.execute(
+        select(func.count(AttendanceRecord.id))
+        .where(AttendanceRecord.student_id == student.id, AttendanceRecord.status == "absent")
+    )).scalar() or 0
+    late = (await db.execute(
+        select(func.count(AttendanceRecord.id))
+        .where(AttendanceRecord.student_id == student.id, AttendanceRecord.status == "late")
+    )).scalar() or 0
+    rate = round((attended / total * 100), 1) if total > 0 else 0
+
+    # By course name
+    course_stmt = (
+        select(
+            Course.name,
+            func.count(AttendanceRecord.id).label("total"),
+            func.count().filter(AttendanceRecord.status == "present").label("attended"),
+            func.count().filter(AttendanceRecord.status == "absent").label("absent"),
+            func.count().filter(AttendanceRecord.status == "late").label("late"),
+        )
+        .join(Course, Course.id == AttendanceRecord.course_id)
+        .where(AttendanceRecord.student_id == student.id)
+        .group_by(Course.name)
+        .order_by(Course.name)
+    )
+    course_rows = (await db.execute(course_stmt)).all()
+    by_course = [
+        {
+            "course_name": row.name,
+            "total": row.total,
+            "attended": row.attended,
+            "absent": row.absent,
+            "late": row.late,
+            "rate": round(row.attended / row.total * 100, 1) if row.total > 0 else 0,
+        }
+        for row in course_rows
+    ]
+
+    # By professor
+    prof_stmt = (
+        select(
+            Professor.first_name,
+            Professor.last_name,
+            func.count(AttendanceRecord.id).label("total"),
+            func.count().filter(AttendanceRecord.status == "present").label("attended"),
+            func.count().filter(AttendanceRecord.status == "absent").label("absent"),
+            func.count().filter(AttendanceRecord.status == "late").label("late"),
+        )
+        .join(Course, Course.id == AttendanceRecord.course_id)
+        .join(Professor, Professor.id == Course.professor_id)
+        .where(AttendanceRecord.student_id == student.id)
+        .group_by(Professor.id)
+        .order_by(Professor.last_name)
+    )
+    prof_rows = (await db.execute(prof_stmt)).all()
+    by_professor = [
+        {
+            "professor_name": f"{row.first_name} {row.last_name}",
+            "total": row.total,
+            "attended": row.attended,
+            "absent": row.absent,
+            "late": row.late,
+            "rate": round(row.attended / row.total * 100, 1) if row.total > 0 else 0,
+        }
+        for row in prof_rows
+    ]
+
+    return {
+        "stats": {
+            "total_courses": total,
+            "attended": attended,
+            "absent": absent,
+            "late": late,
+            "rate": rate,
+        },
+        "by_course": by_course,
+        "by_professor": by_professor,
+    }
