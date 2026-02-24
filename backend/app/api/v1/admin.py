@@ -71,6 +71,110 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     }
 
 
+@router.get("/courses")
+async def get_admin_courses(
+    date: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    from datetime import date as date_type
+    if date:
+        try:
+            target_date = date_type.fromisoformat(date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format, expected YYYY-MM-DD")
+    else:
+        target_date = date_type.today()
+
+    day_start = datetime.combine(target_date, time.min)
+    day_end = datetime.combine(target_date, time.max)
+
+    # Main query: courses with professor and attendance aggregations
+    stmt = (
+        select(
+            Course.id,
+            Course.name,
+            Course.room,
+            Course.start_time,
+            Course.end_time,
+            Professor.first_name.label("prof_first"),
+            Professor.last_name.label("prof_last"),
+            func.count(func.distinct(CourseEnrollment.student_id)).label("total_students"),
+            func.count(func.distinct(AttendanceRecord.id)).filter(AttendanceRecord.status == "present").label("present_count"),
+            func.count(func.distinct(AttendanceRecord.id)).filter(AttendanceRecord.status == "absent").label("absent_count"),
+            func.count(func.distinct(AttendanceRecord.id)).filter(AttendanceRecord.status == "late").label("late_count"),
+            func.count(func.distinct(AttendanceRecord.id)).filter(
+                (AttendanceRecord.signed_at != None) | (AttendanceRecord.qr_signed_at != None)
+            ).label("signed_count"),
+            func.count(AttendanceRecord.id).label("record_count"),
+        )
+        .join(Professor, Professor.id == Course.professor_id)
+        .outerjoin(CourseEnrollment, CourseEnrollment.course_id == Course.id)
+        .outerjoin(AttendanceRecord, AttendanceRecord.course_id == Course.id)
+        .where(Course.start_time >= day_start, Course.start_time <= day_end)
+        .group_by(Course.id, Professor.first_name, Professor.last_name)
+        .order_by(Course.start_time.desc())
+    )
+    rows = (await db.execute(stmt)).all()
+
+    return [
+        {
+            "id": str(row.id),
+            "name": row.name,
+            "room": row.room,
+            "start_time": row.start_time.isoformat(),
+            "end_time": row.end_time.isoformat(),
+            "professor_name": f"{row.prof_first} {row.prof_last}",
+            "total_students": row.total_students,
+            "present_count": row.present_count,
+            "absent_count": row.absent_count,
+            "late_count": row.late_count,
+            "signed_count": row.signed_count,
+            "is_validated": row.record_count > 0,
+        }
+        for row in rows
+    ]
+
+
+@router.get("/courses/{course_id}")
+async def get_admin_course_detail(
+    course_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    course = await db.get(Course, UUID(course_id))
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    professor = await db.get(Professor, course.professor_id)
+
+    # Get attendance records with student info
+    stmt = (
+        select(AttendanceRecord, Student)
+        .join(Student, Student.id == AttendanceRecord.student_id)
+        .where(AttendanceRecord.course_id == course.id)
+        .order_by(Student.last_name, Student.first_name)
+    )
+    rows = (await db.execute(stmt)).all()
+
+    return {
+        "id": str(course.id),
+        "name": course.name,
+        "room": course.room,
+        "start_time": course.start_time.isoformat(),
+        "end_time": course.end_time.isoformat(),
+        "professor_name": f"{professor.first_name} {professor.last_name}" if professor else "Unknown",
+        "students": [
+            {
+                "student_id": str(student.id),
+                "student_name": f"{student.first_name} {student.last_name}",
+                "status": record.status,
+                "signed_at": record.signed_at.isoformat() if record.signed_at else None,
+                "qr_signed_at": record.qr_signed_at.isoformat() if record.qr_signed_at else None,
+            }
+            for record, student in rows
+        ],
+    }
+
+
 @router.get("/professors", response_model=list[ProfessorResponse])
 async def get_professors(db: AsyncSession = Depends(get_db)):
     professors = (await db.execute(select(Professor).order_by(Professor.last_name))).scalars().all()

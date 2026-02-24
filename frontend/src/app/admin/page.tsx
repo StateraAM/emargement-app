@@ -1,6 +1,6 @@
 "use client";
 import { useAuth } from "@/hooks/use-auth";
-import { useAdminStats, useAdminStudents, useAdminProfessors, useAdminJustifications, reviewJustification, useAuditLogs, generateCertificate, generateCertificatesBulk, downloadBlob } from "@/hooks/use-admin";
+import { useAdminStats, useAdminStudents, useAdminProfessors, useAdminJustifications, reviewJustification, useAuditLogs, useAdminCourses, generateCertificate, generateCertificatesBulk, downloadBlob } from "@/hooks/use-admin";
 import { AdminSkeleton } from "@/components/skeleton";
 import { API_URL } from "@/lib/api";
 import { showToast } from "@/lib/toast";
@@ -28,6 +28,8 @@ export default function AdminPage() {
   const [exportEndDate, setExportEndDate] = useState("");
   const [exportStudentId, setExportStudentId] = useState("all");
   const [exportLoading, setExportLoading] = useState(false);
+  const [coursesDate, setCoursesDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const { data: courses } = useAdminCourses(coursesDate);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const toggleSection = (key: string) => setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
 
@@ -76,6 +78,102 @@ export default function AdminPage() {
             accent={false}
             warning={stats.low_attendance_alerts > 0}
           />
+        </div>
+
+        {/* Cours Section */}
+        <div className="mb-8">
+          <button
+            onClick={() => toggleSection("courses")}
+            className="flex items-center gap-3 mb-4 w-full text-left md:cursor-default"
+          >
+            <h2
+              className="text-2xl font-bold text-[var(--color-text)]"
+              style={{ fontFamily: "var(--font-playfair)" }}
+            >
+              Cours
+            </h2>
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className={`ml-auto text-[var(--color-text-muted)] md:hidden transition-transform ${collapsed.courses ? "" : "rotate-180"}`}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+
+          <div className={`${collapsed.courses ? "hidden md:block" : ""}`}>
+            <div className="mb-4">
+              <input
+                type="date"
+                value={coursesDate}
+                onChange={(e) => setCoursesDate(e.target.value)}
+                className="px-3 py-2 text-sm bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] focus:outline-none"
+              />
+            </div>
+
+            <div className="bg-[var(--color-surface-card)] rounded-2xl shadow-sm border border-[var(--color-border-light)] overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-[var(--color-surface)] text-[var(--color-text-muted)] text-xs uppercase tracking-wider">
+                      <th className="text-left px-4 py-3 font-semibold">Cours</th>
+                      <th className="text-left px-4 py-3 font-semibold hidden sm:table-cell">Salle</th>
+                      <th className="text-left px-4 py-3 font-semibold hidden md:table-cell">Professeur</th>
+                      <th className="text-left px-4 py-3 font-semibold">Horaire</th>
+                      <th className="text-center px-4 py-3 font-semibold">Presents</th>
+                      <th className="text-center px-4 py-3 font-semibold hidden sm:table-cell">Absents</th>
+                      <th className="text-center px-4 py-3 font-semibold hidden md:table-cell">Retards</th>
+                      <th className="text-center px-4 py-3 font-semibold">Signatures</th>
+                      <th className="text-center px-4 py-3 font-semibold">Statut</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--color-border-light)]">
+                    {courses?.map((c) => (
+                      <tr
+                        key={c.id}
+                        onClick={() => router.push(`/admin/courses/${c.id}`)}
+                        className="hover:bg-[var(--color-surface)] transition-colors cursor-pointer"
+                      >
+                        <td className="px-4 py-3 font-semibold text-[var(--color-text)]">{c.name}</td>
+                        <td className="px-4 py-3 text-[var(--color-text-muted)] hidden sm:table-cell">{c.room}</td>
+                        <td className="px-4 py-3 text-[var(--color-text-secondary)] hidden md:table-cell">{c.professor_name}</td>
+                        <td className="px-4 py-3 text-[var(--color-text-muted)]">
+                          {new Date(c.start_time).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                          {" - "}
+                          {new Date(c.end_time).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                        </td>
+                        <td className="px-4 py-3 text-center text-[var(--color-success)] font-medium">{c.present_count}</td>
+                        <td className="px-4 py-3 text-center text-[var(--color-danger)] font-medium hidden sm:table-cell">{c.absent_count}</td>
+                        <td className="px-4 py-3 text-center text-[var(--color-warning)] font-medium hidden md:table-cell">{c.late_count}</td>
+                        <td className="px-4 py-3 text-center text-[var(--color-text)]">{c.signed_count}/{c.present_count}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span
+                            className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${
+                              c.is_validated
+                                ? "bg-[var(--color-success-bg)] text-[var(--color-success)]"
+                                : "bg-[var(--color-surface)] text-[var(--color-text-muted)]"
+                            }`}
+                          >
+                            {c.is_validated ? "Valide" : "En attente"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {courses?.length === 0 && (
+                <div className="text-center py-12 text-[var(--color-text-muted)] text-sm">
+                  Aucun cours trouve pour cette date
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Justifications Section */}

@@ -208,6 +208,50 @@ export async function addJustificationComment(justificationId: string, message: 
   return api.post<{ ok: boolean }>(`/api/v1/admin/justifications/${justificationId}/comment`, { message });
 }
 
+export interface AdminCourse {
+  id: string;
+  name: string;
+  room: string;
+  start_time: string;
+  end_time: string;
+  professor_name: string;
+  total_students: number;
+  present_count: number;
+  absent_count: number;
+  late_count: number;
+  signed_count: number;
+  is_validated: boolean;
+}
+
+export function useAdminCourses(date?: string) {
+  const params = date ? `?date=${date}` : "";
+  return useSWR<AdminCourse[]>(`admin-courses-${date || "today"}`, {
+    fetcher: () => api.get<AdminCourse[]>(`/api/v1/admin/courses${params}`),
+  });
+}
+
+export interface AdminCourseDetail {
+  id: string;
+  name: string;
+  room: string;
+  start_time: string;
+  end_time: string;
+  professor_name: string;
+  students: {
+    student_id: string;
+    student_name: string;
+    status: string;
+    signed_at: string | null;
+    qr_signed_at: string | null;
+  }[];
+}
+
+export function useAdminCourseDetail(courseId: string) {
+  return useSWR<AdminCourseDetail>(courseId ? `admin-course-detail-${courseId}` : null, {
+    fetcher: () => api.get<AdminCourseDetail>(`/api/v1/admin/courses/${courseId}`),
+  });
+}
+
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

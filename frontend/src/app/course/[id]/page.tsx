@@ -63,6 +63,7 @@ export default function AttendancePage() {
   const [attendanceStatus, setAttendanceStatus] = useState<AttendanceStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
   const [liveSignatures, setLiveSignatures] = useState<LiveSignature[]>([]);
+  const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const router = useRouter();
 
   const handleWsMessage = useCallback((msg: { type: string; student_id: string; student_name: string; signed_at: string }) => {
@@ -100,6 +101,7 @@ export default function AttendancePage() {
         if (status.validated) {
           const records = await getAttendanceRecords(id);
           if (cancelled) return;
+          setRecords(records);
           const prePopulated: Record<string, Status> = {};
           records.forEach((r: AttendanceRecord) => {
             if (r.status === "present" || r.status === "absent" || r.status === "late") {
@@ -158,6 +160,12 @@ export default function AttendancePage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const hasStudentSigned = (studentId: string): boolean => {
+    const record = records.find((r) => r.student_id === studentId);
+    if (record && (record.signed_at || record.qr_signed_at)) return true;
+    return liveSignatures.some((s) => s.student_id === studentId);
   };
 
   const presentCount = students?.filter(
@@ -236,11 +244,11 @@ export default function AttendancePage() {
             </div>
           )}
 
-          {/* Live Signatures */}
+          {/* Student list with signature status */}
           <div className="text-left mb-6">
             <div className="flex items-center gap-2 mb-3">
               <h3 className="text-sm font-semibold text-[var(--color-text)]">
-                Signatures en direct
+                Liste des etudiants
               </h3>
               <span
                 className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${
@@ -260,43 +268,65 @@ export default function AttendancePage() {
               </span>
             </div>
 
-            {liveSignatures.length === 0 ? (
-              <p className="text-xs text-[var(--color-text-muted)]">
-                En attente de signatures...
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {liveSignatures.map((sig) => (
+            <div className="space-y-2">
+              {students?.map((student) => {
+                const status = getStatus(student.id);
+                const config = statusConfig[status];
+                const signed = hasStudentSigned(student.id);
+                return (
                   <div
-                    key={sig.student_id}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-success-bg)] border border-[var(--color-success-border)] animate-fade-in"
+                    key={student.id}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border ${config.bg} ${config.border}`}
                   >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="var(--color-success)"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-semibold text-[var(--color-text)]">
+                        {student.last_name}{" "}
+                        <span className="font-normal">{student.first_name}</span>
+                      </span>
+                    </div>
+                    <span
+                      className={`text-xs font-semibold ${config.text} px-2 py-0.5 rounded-lg bg-[var(--color-surface-card)]/50`}
                     >
-                      <path d="M9 12l2 2 4-4" />
-                      <circle cx="12" cy="12" r="10" />
-                    </svg>
-                    <span className="text-sm font-medium text-[var(--color-success)]">
-                      {sig.student_name}
+                      {config.label}
                     </span>
-                    <span className="text-xs text-[var(--color-text-muted)] ml-auto">
-                      {new Date(sig.signed_at).toLocaleTimeString("fr-FR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
+                    {signed ? (
+                      <span className="flex items-center gap-1 text-xs font-medium text-[var(--color-success)]">
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="var(--color-success)"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M9 12l2 2 4-4" />
+                        </svg>
+                        Signe
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs font-medium text-[var(--color-text-muted)]">
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="var(--color-text-muted)"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <circle cx="12" cy="12" r="10" />
+                          <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                        En attente
+                      </span>
+                    )}
                   </div>
-                ))}
-              </div>
-            )}
+                );
+              })}
+            </div>
           </div>
 
           <button
@@ -467,11 +497,45 @@ export default function AttendancePage() {
                       )}
                     </div>
                   </div>
-                  <span
-                    className={`text-sm font-semibold ${config.text} px-2.5 py-1 rounded-lg bg-[var(--color-surface-card)]/50`}
-                  >
-                    {config.label}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {isValidated && (
+                      <span className="flex items-center gap-1">
+                        {hasStudentSigned(student.id) ? (
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="var(--color-success)"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M9 12l2 2 4-4" />
+                          </svg>
+                        ) : (
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="var(--color-text-muted)"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                          </svg>
+                        )}
+                      </span>
+                    )}
+                    <span
+                      className={`text-sm font-semibold ${config.text} px-2.5 py-1 rounded-lg bg-[var(--color-surface-card)]/50`}
+                    >
+                      {config.label}
+                    </span>
+                  </div>
                 </div>
               </button>
             );

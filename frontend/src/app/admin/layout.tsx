@@ -10,6 +10,7 @@ const breadcrumbLabels: Record<string, string> = {
   students: "Etudiants",
   professors: "Professeurs",
   justifications: "Justificatifs",
+  courses: "Cours",
   "students-at-risk": "Etudiants a risque",
 };
 
