@@ -132,6 +132,33 @@ export async function generateCertificatesBulk(startDate: string, endDate: strin
   return resp.blob();
 }
 
+export interface StudentProfile {
+  student: {
+    id: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    is_alternance: boolean;
+  };
+  stats: {
+    total_courses: number;
+    attended: number;
+    absent: number;
+    late: number;
+    attendance_rate: number;
+  };
+  by_course: { course_name: string; total: number; attended: number; absent: number; late: number; rate: number }[];
+  by_professor: { professor_name: string; total: number; attended: number; absent: number; late: number; rate: number }[];
+  recent_absences: { course_name: string; date: string; status: string; justification_status: string | null }[];
+  justifications: { id: string; course_name: string; date: string; reason: string; status: string }[];
+}
+
+export function useStudentProfile(studentId: string) {
+  return useSWR<StudentProfile>(studentId ? `admin-student-profile-${studentId}` : null, {
+    fetcher: () => api.get<StudentProfile>(`/api/v1/admin/students/${studentId}/profile`),
+  });
+}
+
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

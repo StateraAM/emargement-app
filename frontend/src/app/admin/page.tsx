@@ -6,6 +6,7 @@ import { API_URL } from "@/lib/api";
 import { showToast } from "@/lib/toast";
 import { mutate } from "swr";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export default function AdminPage() {
@@ -352,12 +353,14 @@ export default function AdminPage() {
                     className="hover:bg-[var(--color-surface)] transition-colors"
                   >
                     <td className="px-5 py-3.5">
-                      <span className="font-semibold text-[var(--color-text)]">
-                        {s.last_name}
-                      </span>{" "}
-                      <span className="text-[var(--color-text-secondary)]">
-                        {s.first_name}
-                      </span>
+                      <Link href={`/admin/students/${s.id}`} className="hover:underline">
+                        <span className="font-semibold text-[var(--color-text)]">
+                          {s.last_name}
+                        </span>{" "}
+                        <span className="text-[var(--color-text-secondary)]">
+                          {s.first_name}
+                        </span>
+                      </Link>
                     </td>
                     <td className="px-5 py-3.5 text-[var(--color-text-muted)] hidden md:table-cell">
                       {s.email}
